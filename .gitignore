@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+
+# Editor settings
+.vscode/
+.idea/
+
+# Backend artifacts and secrets
+backend/node_modules/
+backend/dist/
+backend/.env
+
+# Flutter artifacts and local tooling
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.idea/
+mobile/.packages
+mobile/pubspec_overrides.yaml
+
+# iOS/macOS CocoaPods and ephemeral Flutter files
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/ios/Flutter/ephemeral/
+mobile/macos/Pods/
+mobile/macos/Flutter/ephemeral/
+
+# finance_mvp artifacts and secrets
+finance_mvp/frontend/node_modules/
+finance_mvp/frontend/.next/
+finance_mvp/frontend/.env.local
+finance_mvp/backend/.env
+finance_mvp/backend/storage/
+finance_mvp/backend/.venv/
+finance_mvp/backend/__pycache__/
+finance_mvp/backend/**/__pycache__/
+*.pyc
+
+# Python virtual environments
+.venv/
+
+# Misc
+*.log

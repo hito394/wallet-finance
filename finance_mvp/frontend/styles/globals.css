@@ -1,0 +1,37 @@
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --ink: #10212f;
+  --muted: #5f7284;
+  --accent: #0f766e;
+  --accent-2: #22c55e;
+  --warn: #b45309;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top right, #d9f99d 0%, #f4f6f8 42%), var(--bg);
+  color: var(--ink);
+  font-family: "Manrope", "Avenir Next", "Segoe UI", sans-serif;
+}
+
+main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+h1, h2, h3 {
+  margin: 0;
+  line-height: 1.2;
+}
+
+.panel {
+  background: var(--panel);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(16, 33, 47, 0.08);
+}
