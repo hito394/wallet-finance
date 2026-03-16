@@ -36,4 +36,6 @@ services:
     startCommand: npm run start
     envVars:
       - key: NEXT_PUBLIC_API_BASE_URL
-        sync: false
+        value: https://ai-finance-assistant-api.onrender.com/api/v1
+      - key: AI_PROXY_ORIGIN
+        value: https://ai-finance-assistant-api.onrender.com

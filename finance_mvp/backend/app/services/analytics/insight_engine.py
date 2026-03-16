@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.category import Category
 from app.models.transaction import Transaction, TransactionDirection
-from app.schemas.analytics import InsightItem, MonthlyCategorySpend, MonthlyOverview
+from app.schemas.analytics import InsightItem, MonthlyHistoryItem, MonthlyCategorySpend, MonthlyOverview
 
 
 def monthly_overview(db: Session, entity_id, year: int, month: int) -> MonthlyOverview:
@@ -88,3 +88,41 @@ def generate_insights(overview: MonthlyOverview) -> list[InsightItem]:
         insights.append(InsightItem(title="Budget warning", severity="high", details=alert))
 
     return insights
+
+
+def monthly_history(db: Session, entity_id, months: int) -> list[MonthlyHistoryItem]:
+    """Return aggregated spend/income for the last `months` calendar months."""
+    rows = db.execute(
+        select(
+            extract("year", Transaction.transaction_date).label("yr"),
+            extract("month", Transaction.transaction_date).label("mo"),
+            Transaction.direction,
+            func.sum(Transaction.amount).label("total"),
+        )
+        .where(
+            Transaction.entity_id == entity_id,
+            Transaction.is_ignored.is_(False),
+        )
+        .group_by("yr", "mo", Transaction.direction)
+        .order_by("yr", "mo")
+    ).all()
+
+    # Bucket into {(yr, mo): {spend, income}}
+    buckets: dict[tuple[int, int], dict[str, Decimal]] = defaultdict(lambda: {"spend": Decimal("0"), "income": Decimal("0")})
+    for yr, mo, direction, total in rows:
+        key = (int(yr), int(mo))
+        if direction == TransactionDirection.debit:
+            buckets[key]["spend"] += total or Decimal("0")
+        elif direction == TransactionDirection.credit:
+            buckets[key]["income"] += total or Decimal("0")
+
+    # Take the last `months` distinct months that have data
+    sorted_keys = sorted(buckets.keys())[-months:]
+    return [
+        MonthlyHistoryItem(
+            month=f"{yr:04d}-{mo:02d}",
+            spend=buckets[(yr, mo)]["spend"],
+            income=buckets[(yr, mo)]["income"],
+        )
+        for yr, mo in sorted_keys
+    ]

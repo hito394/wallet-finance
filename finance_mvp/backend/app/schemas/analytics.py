@@ -22,3 +22,9 @@ class InsightItem(BaseModel):
     title: str
     severity: str
     details: str
+
+
+class MonthlyHistoryItem(BaseModel):
+    month: str
+    spend: Decimal
+    income: Decimal

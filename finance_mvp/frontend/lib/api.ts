@@ -30,6 +30,12 @@ export type MonthlyOverview = {
   alerts: string[];
 };
 
+export type MonthlyHistoryItem = {
+  month: string;
+  spend: string;
+  income: string;
+};
+
 export type InsightItem = {
   title: string;
   detail: string;
@@ -191,6 +197,10 @@ export async function fetchInsights(entityId?: string, year?: number, month?: nu
   if (month) params.set("month", String(month));
   const query = params.toString() ? `?${params.toString()}` : "";
   return requestJson<InsightItem[]>(`/analytics/insights${query}`, undefined, { entityId });
+}
+
+export async function fetchMonthlyHistory(entityId?: string, months = 6): Promise<ApiResult<MonthlyHistoryItem[]>> {
+  return requestJson<MonthlyHistoryItem[]>(`/analytics/monthly-history?months=${months}`, undefined, { entityId });
 }
 
 export async function fetchTransactions(entityId?: string, year?: number, month?: number): Promise<ApiResult<TransactionItem[]>> {
