@@ -1,0 +1,5 @@
+{
+  "APP_ENV": "dev",
+  "API_BASE_URL": "http://10.144.156.205:8080",
+  "ENABLE_VERBOSE_LOG": "true"
+}
