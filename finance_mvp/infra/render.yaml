@@ -24,7 +24,7 @@ services:
       - key: MAX_UPLOAD_MB
         value: "25"
       - key: CORS_ORIGINS
-        value: '["https://ai-finance-assistant-frontend.onrender.com"]'
+        value: '["https://ai-finance-assistant-frontend-hdft.onrender.com","https://ai-finance-assistant-frontend.onrender.com"]'
       - key: TRUSTED_HOSTS
         value: '["ai-finance-assistant-api.onrender.com"]'
 
