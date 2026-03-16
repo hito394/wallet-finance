@@ -1,0 +1,5 @@
+{
+  "APP_ENV": "prod",
+  "API_BASE_URL": "https://api.example.com",
+  "ENABLE_VERBOSE_LOG": "false"
+}

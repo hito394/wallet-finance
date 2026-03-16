@@ -1,11 +1,5 @@
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache/
-.venv/
-venv/
+node_modules
+npm-debug.log
+dist
 .env
-tests/
-uploads/
-finance.db
+.env.*

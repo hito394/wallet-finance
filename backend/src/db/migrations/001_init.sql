@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS upload_records (
+  id BIGSERIAL PRIMARY KEY,
+  storage_key TEXT NOT NULL,
+  file_url TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
