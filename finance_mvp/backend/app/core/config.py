@@ -1,8 +1,10 @@
 from functools import lru_cache
+import json
 from pathlib import Path
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -16,8 +18,8 @@ class Settings(BaseSettings):
     default_currency: str = Field(default="USD", alias="DEFAULT_CURRENCY")
     ocr_engine: str = Field(default="tesseract", alias="OCR_ENGINE")
     max_upload_mb: int = Field(default=25, alias="MAX_UPLOAD_MB")
-    cors_origins: list[str] = Field(default_factory=lambda: ["*"], alias="CORS_ORIGINS")
-    trusted_hosts: list[str] = Field(default_factory=lambda: ["*"], alias="TRUSTED_HOSTS")
+    cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"], alias="CORS_ORIGINS")
+    trusted_hosts: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"], alias="TRUSTED_HOSTS")
 
     @field_validator("database_url", mode="before")
     @classmethod
@@ -38,6 +40,16 @@ class Settings(BaseSettings):
         if isinstance(value, list):
             return value
         if isinstance(value, str):
+            # Support JSON array values when entered in cloud env UIs.
+            stripped = value.strip()
+            if stripped.startswith("[") and stripped.endswith("]"):
+                try:
+                    parsed = json.loads(stripped)
+                    if isinstance(parsed, list):
+                        return [str(item).strip() for item in parsed if str(item).strip()] or ["*"]
+                except json.JSONDecodeError:
+                    pass
+
             values = [item.strip() for item in value.split(",") if item.strip()]
             return values or ["*"]
         return ["*"]
