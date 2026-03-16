@@ -27,10 +27,26 @@ This is the shortest sequence to connect cloud safely and verify end-to-end beha
 
 ## 3. Connect frontend to cloud API
 
-1. In Render frontend service, set:
+1. In Render frontend service (`ai-finance-assistant-frontend`), confirm settings:
+	- `Root Directory=finance_mvp/frontend`
+	- `Build Command=npm ci && npm run build`
+	- `Start Command=npm run start`
+	- `Runtime=Node`
+2. Set env var:
 	- `NEXT_PUBLIC_API_BASE_URL=https://<api-service>.onrender.com/api/v1`
-2. Trigger frontend deploy.
-3. Open frontend URL and check dashboard loads.
+3. Trigger frontend deploy.
+4. Validate frontend host:
+	- Root should render Next app UI (not a static HTML landing template)
+	- `/dashboard` must return `200` (not `404`)
+
+### Troubleshooting: old static page is still shown
+
+If `https://<frontend-service>.onrender.com` returns a static HTML page and `/dashboard` is `404`, the service is still pointing to an old app definition.
+
+1. In Render dashboard, open `ai-finance-assistant-frontend`.
+2. Re-save the service with the settings above (especially `Root Directory`).
+3. If it still serves old content, recreate only the frontend web service from the same repo/branch using `finance_mvp/frontend` as root.
+4. Redeploy and re-check root + `/dashboard`.
 
 ## 4. Run cloud smoke tests (must pass)
 

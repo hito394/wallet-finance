@@ -5,9 +5,18 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recha
 type Data = { category: string; total: string };
 
 export default function CategoryChart({ data }: { data: Data[] }) {
+  if (!data.length) {
+    return (
+      <div className="panel chart-panel">
+        <h3>Category Breakdown</h3>
+        <div className="empty-state">No category data available for this period.</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="panel" style={{ padding: 16, minHeight: 320 }}>
-      <h3 style={{ marginBottom: 12 }}>Category Breakdown</h3>
+    <div className="panel chart-panel">
+      <h3>Category Breakdown</h3>
       <ResponsiveContainer width="100%" height={260}>
         <BarChart data={data}>
           <XAxis dataKey="category" tick={{ fontSize: 12 }} />

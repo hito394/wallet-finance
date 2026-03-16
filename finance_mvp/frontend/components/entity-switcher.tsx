@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type EntityItem = {
   id: string;
@@ -10,6 +10,7 @@ type EntityItem = {
 
 export default function EntitySwitcher({ entities, selectedId }: { entities: EntityItem[]; selectedId: string }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   return (
@@ -20,7 +21,8 @@ export default function EntitySwitcher({ entities, selectedId }: { entities: Ent
         onChange={(event) => {
           const params = new URLSearchParams(searchParams.toString());
           params.set("entityId", event.target.value);
-          router.push(`/dashboard?${params.toString()}`);
+          const query = params.toString();
+          router.push(query ? `${pathname}?${query}` : pathname);
         }}
         style={{
           border: "1px solid #d7dee5",
