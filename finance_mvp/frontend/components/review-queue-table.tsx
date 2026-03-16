@@ -18,6 +18,8 @@ export default function ReviewQueueTable({ initialRows }: Props) {
     return <div className="empty-state">No review items are open right now.</div>;
   }
 
+  const isOpen = (status: ReviewQueueItem["status"]) => status === "pending";
+
   return (
     <div className="panel table-panel">
       {error && <StatusMessage tone="error" title="Unable to update review item" detail={error} />}
@@ -39,11 +41,11 @@ export default function ReviewQueueTable({ initialRows }: Props) {
                   <p style={{ margin: "4px 0 0", color: "var(--muted)" }}>{row.reason_text}</p>
                 </td>
                 <td>
-                  <span className={`pill ${row.status === "open" ? "warn" : "success"}`}>{row.status}</span>
+                  <span className={`pill ${isOpen(row.status) ? "warn" : "success"}`}>{row.status}</span>
                 </td>
                 <td>{new Date(row.created_at).toLocaleString()}</td>
                 <td>
-                  {row.status === "open" ? (
+                  {isOpen(row.status) ? (
                     <button
                       type="button"
                       className="btn secondary"
@@ -51,7 +53,7 @@ export default function ReviewQueueTable({ initialRows }: Props) {
                       onClick={async () => {
                         setPendingId(row.id);
                         setError(null);
-                        const result = await resolveReviewQueueItem(row.id, "resolved", row.entity_id);
+                        const result = await resolveReviewQueueItem(row.id, "approved", row.entity_id);
                         setPendingId(null);
                         if (result.error || !result.data) {
                           setError(result.error || "Failed to resolve review item.");

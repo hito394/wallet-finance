@@ -1,6 +1,9 @@
 "use client";
 
+import { useState } from "react";
+
 import type { DocumentItem } from "@/lib/api";
+import type { ImportSourceType } from "@/lib/api";
 import ConfidenceBadge from "./ConfidenceBadge";
 import DocumentStatusBadge from "./DocumentStatusBadge";
 import DocumentTypeBadge from "./DocumentTypeBadge";
@@ -8,9 +11,36 @@ import DocumentTypeBadge from "./DocumentTypeBadge";
 type Props = {
   doc: DocumentItem;
   onClose: () => void;
+  onRetryParse?: () => Promise<void>;
+  onMarkType?: (sourceType: ImportSourceType) => Promise<void>;
+  isRetrying?: boolean;
+  isUpdatingType?: boolean;
 };
 
-export default function DocumentReviewDrawer({ doc, onClose }: Props) {
+const TYPE_OPTIONS: ImportSourceType[] = [
+  "bank_statement",
+  "credit_card_statement",
+  "receipt",
+  "invoice",
+  "paid_invoice",
+  "refund_confirmation",
+  "subscription_billing_record",
+  "financial_document",
+  "wallet_screenshot",
+  "email_receipt",
+];
+
+export default function DocumentReviewDrawer({
+  doc,
+  onClose,
+  onRetryParse,
+  onMarkType,
+  isRetrying,
+  isUpdatingType,
+}: Props) {
+  const [selectedType, setSelectedType] = useState<ImportSourceType>(
+    (doc.source_type_hint as ImportSourceType) || "financial_document",
+  );
   const hasTypeMismatch =
     doc.source_type_hint &&
     doc.source_type_hint !== doc.document_type;
@@ -83,10 +113,15 @@ export default function DocumentReviewDrawer({ doc, onClose }: Props) {
                   <span style={{ color: "#dc2626" }}>{doc.parsing_failure_reason}</span>
                 </Field>
               )}
+              <Field label="Transactions Created Count">
+                <span style={{ color: doc.transactions_created_count > 0 ? "#15803d" : "#94a3b8" }}>
+                  {doc.transactions_created_count}
+                </span>
+              </Field>
               <Field label="Transactions Created">
-                {doc.extracted_transaction_count > 0 ? (
+                {doc.transactions_created_count > 0 ? (
                   <span style={{ color: "#15803d", fontWeight: 700 }}>
-                    ✓ {doc.extracted_transaction_count} transaction{doc.extracted_transaction_count !== 1 ? "s" : ""}
+                    ✓ {doc.transactions_created_count} transaction{doc.transactions_created_count !== 1 ? "s" : ""}
                   </span>
                 ) : (
                   <span style={{ color: "#94a3b8" }}>None extracted</span>
@@ -100,21 +135,77 @@ export default function DocumentReviewDrawer({ doc, onClose }: Props) {
             </div>
 
             {/* Right: close button */}
-            <button
-              onClick={onClose}
-              style={{
-                background: "none",
-                border: "1px solid #cbd5e1",
-                borderRadius: 4,
-                padding: "4px 10px",
-                cursor: "pointer",
-                fontSize: 12,
-                color: "#64748b",
-                flexShrink: 0,
-              }}
-            >
-              Close ↑
-            </button>
+            <div style={{ display: "grid", gap: 8, minWidth: 180 }}>
+              {onRetryParse && (
+                <button
+                  onClick={onRetryParse}
+                  disabled={isRetrying}
+                  style={{
+                    background: "#0f172a",
+                    border: "1px solid #0f172a",
+                    borderRadius: 6,
+                    padding: "6px 10px",
+                    cursor: isRetrying ? "not-allowed" : "pointer",
+                    fontSize: 12,
+                    color: "#f8fafc",
+                    fontWeight: 600,
+                  }}
+                >
+                  {isRetrying ? "Retrying..." : "Retry Parse"}
+                </button>
+              )}
+              {onMarkType && (
+                <>
+                  <select
+                    value={selectedType}
+                    onChange={(e) => setSelectedType(e.target.value as ImportSourceType)}
+                    style={{
+                      border: "1px solid #cbd5e1",
+                      borderRadius: 6,
+                      padding: "6px 8px",
+                      fontSize: 12,
+                    }}
+                  >
+                    {TYPE_OPTIONS.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => onMarkType(selectedType)}
+                    disabled={isUpdatingType}
+                    style={{
+                      background: "#eff6ff",
+                      border: "1px solid #93c5fd",
+                      borderRadius: 6,
+                      padding: "6px 10px",
+                      cursor: isUpdatingType ? "not-allowed" : "pointer",
+                      fontSize: 12,
+                      color: "#1d4ed8",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {isUpdatingType ? "Saving..." : "Mark Correct Type"}
+                  </button>
+                </>
+              )}
+              <button
+                onClick={onClose}
+                style={{
+                  background: "none",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 4,
+                  padding: "4px 10px",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  color: "#64748b",
+                  flexShrink: 0,
+                }}
+              >
+                Close ↑
+              </button>
+            </div>
           </div>
 
           {/* Raw text preview */}

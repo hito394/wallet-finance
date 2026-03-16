@@ -19,6 +19,9 @@ DETAIL_SECTION_TITLES = {
     "TRANSACTION DETAIL (CONTINUED)",
     "TRANSACTIONS",
     "PAYMENTS AND OTHER CREDITS",
+    "DEPOSITS AND ADDITIONS",
+    "ELECTRONIC WITHDRAWALS",
+    "CHECKS PAID",
 }
 SUMMARY_SECTION_TITLES = {
     "MINIMUM PAYMENT DUE",
@@ -169,6 +172,14 @@ def _parse_transaction_line(
         return None
 
     amount, direction = parsed_amount
+    running_balance = None
+    if len(amount_matches) >= 2 and source in {"bank", "card"}:
+        balance_candidate = amount_matches[-1]
+        if balance_candidate.start() != amount_match.start():
+            parsed_balance = _parse_amount_token(balance_candidate.group(0))
+            if parsed_balance:
+                running_balance = parsed_balance[0]
+
     description = re.sub(r"\s+", " ", rest[: amount_match.start()].strip(" -\t"))
     if len(description) < 3:
         return None
@@ -183,6 +194,7 @@ def _parse_transaction_line(
         merchant_raw=description,
         description=description,
         amount=amount,
+        running_balance=running_balance,
         direction=direction,
         currency="USD",
         source=source,

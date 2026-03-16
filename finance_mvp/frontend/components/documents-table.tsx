@@ -3,6 +3,7 @@
 import { Fragment, useState } from "react";
 
 import type { DocumentItem } from "@/lib/api";
+import type { ImportSourceType } from "@/lib/api";
 import ConfidenceBadge from "@/components/documents/ConfidenceBadge";
 import DocumentStatusBadge from "@/components/documents/DocumentStatusBadge";
 import DocumentTypeBadge from "@/components/documents/DocumentTypeBadge";
@@ -12,6 +13,12 @@ type Props = {
   rows: DocumentItem[];
   filter?: string;
   search?: string;
+  sourceTypeFilter?: string;
+  minConfidence?: number;
+  onRetryParse?: (documentId: string) => Promise<void>;
+  onMarkType?: (documentId: string, sourceType: ImportSourceType) => Promise<void>;
+  retryingDocumentId?: string | null;
+  updatingTypeDocumentId?: string | null;
 };
 
 const SOURCE_TYPE_LABELS: Record<string, string> = {
@@ -27,7 +34,17 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
   email_receipt: "Email Receipt",
 };
 
-export default function DocumentsTable({ rows, filter, search }: Props) {
+export default function DocumentsTable({
+  rows,
+  filter,
+  search,
+  sourceTypeFilter,
+  minConfidence,
+  onRetryParse,
+  onMarkType,
+  retryingDocumentId,
+  updatingTypeDocumentId,
+}: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const isStatement = (row: DocumentItem) =>
@@ -39,7 +56,14 @@ export default function DocumentsTable({ rows, filter, search }: Props) {
   const visible = rows.filter((row) => {
     if (filter === "review" && !row.review_required) return false;
     if (filter === "failed" && row.parsing_status !== "failed") return false;
-    if (filter === "parsed" && row.parsing_status !== "parsed") return false;
+    if (filter === "parsed" && !["parsed", "partial"].includes(row.parsing_status)) return false;
+    if (sourceTypeFilter && sourceTypeFilter !== "all") {
+      const selected = row.source_type_hint ?? row.document_type;
+      if (selected !== sourceTypeFilter) return false;
+    }
+    if (typeof minConfidence === "number" && row.document_type_confidence < minConfidence) {
+      return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       if (
@@ -144,8 +168,8 @@ export default function DocumentsTable({ rows, filter, search }: Props) {
                       )}
                     </td>
                     <td style={{ fontSize: 11, fontWeight: 600 }}>
-                      {row.extracted_transaction_count > 0 ? (
-                        <span style={{ color: "#15803d" }}>Yes</span>
+                      {row.transactions_created_count > 0 ? (
+                        <span style={{ color: "#15803d" }}>Yes ({row.transactions_created_count})</span>
                       ) : (
                         <span style={{ color: "#94a3b8" }}>No</span>
                       )}
@@ -164,6 +188,10 @@ export default function DocumentsTable({ rows, filter, search }: Props) {
                     <DocumentReviewDrawer
                       doc={row}
                       onClose={() => setExpandedId(null)}
+                      onRetryParse={onRetryParse ? async () => onRetryParse(row.id) : undefined}
+                      onMarkType={onMarkType ? async (sourceType) => onMarkType(row.id, sourceType) : undefined}
+                      isRetrying={retryingDocumentId === row.id}
+                      isUpdatingType={updatingTypeDocumentId === row.id}
                     />
                   )}
                 </Fragment>

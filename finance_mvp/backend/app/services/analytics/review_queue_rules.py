@@ -8,8 +8,6 @@ _STATEMENT_TYPES = {
 
 
 def derive_review_reason(document: FinancialDocument) -> tuple[bool, str | None, str | None]:
-    if document.extraction_confidence < 0.5:
-        return True, "low_ocr_confidence", "Low OCR confidence; verify extracted values"
     if document.document_type == FinancialDocumentType.unknown_financial_document:
         return True, "unknown_document_type", "Unknown financial document type"
     if document.possible_duplicate_document:
@@ -55,6 +53,9 @@ def derive_review_reason(document: FinancialDocument) -> tuple[bool, str | None,
                 "No transaction rows were extracted from this statement",
             )
         return False, None, None
+
+    if document.extraction_confidence < 0.5:
+        return True, "low_ocr_confidence", "Low OCR confidence; verify extracted values"
 
     # Non-statement docs: flag for missing total amount
     if document.total_amount is None:

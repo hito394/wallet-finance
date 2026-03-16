@@ -45,12 +45,14 @@ export type InsightItem = {
 export type TransactionItem = {
   id: string;
   entity_id: string;
+  document_id: string | null;
   transaction_date: string;
   merchant_raw: string;
   merchant_normalized: string;
   description: string;
   amount: string;
-  direction: "inflow" | "outflow";
+  running_balance: string | null;
+  direction: "debit" | "credit" | "transfer";
   currency: string;
   category_id: string | null;
   receipt_id: string | null;
@@ -76,10 +78,14 @@ export type DocumentItem = {
   // enriched intelligence
   likely_issuer: string | null;
   source_type_hint: string | null;
+  selected_source_type: string | null;
+  detected_document_type: string | null;
+  detected_document_type_confidence: number;
   parsing_status: string;
   parsing_failure_reason: string | null;
   raw_text_preview: string | null;
   extracted_transaction_count: number;
+  transactions_created_count: number;
   extracted_total_amount: string | null;
   created_at: string;
 };
@@ -91,7 +97,7 @@ export type ReviewQueueItem = {
   transaction_id: string | null;
   reason_code: string;
   reason_text: string;
-  status: "open" | "resolved" | "dismissed";
+  status: "pending" | "approved" | "edited" | "merged" | "ignored";
   created_at: string;
   resolved_at: string | null;
 };
@@ -262,7 +268,7 @@ export async function fetchReviewQueue(entityId?: string): Promise<ApiResult<Rev
 
 export async function resolveReviewQueueItem(
   reviewId: string,
-  status: "open" | "resolved" | "dismissed",
+  status: "pending" | "approved" | "edited" | "merged" | "ignored",
   entityId?: string,
 ): Promise<ApiResult<ReviewQueueItem>> {
   return requestJson<ReviewQueueItem>(
@@ -271,6 +277,33 @@ export async function resolveReviewQueueItem(
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
+    },
+    { entityId },
+  );
+}
+
+export async function retryDocumentParse(
+  documentId: string,
+  entityId?: string,
+): Promise<ApiResult<{ import_id: string; status: string }>> {
+  return requestJson<{ import_id: string; status: string }>(
+    `/documents/${encodeURIComponent(documentId)}/reparse`,
+    { method: "POST" },
+    { entityId },
+  );
+}
+
+export async function updateDocumentTypeHint(
+  documentId: string,
+  sourceTypeHint: ImportSourceType,
+  entityId?: string,
+): Promise<ApiResult<DocumentItem>> {
+  return requestJson<DocumentItem>(
+    `/documents/${encodeURIComponent(documentId)}/type-hint`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source_type_hint: sourceTypeHint }),
     },
     { entityId },
   );

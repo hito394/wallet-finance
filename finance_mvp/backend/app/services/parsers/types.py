@@ -13,6 +13,7 @@ class ParsedTransaction:
     direction: str
     currency: str
     source: str
+    running_balance: Decimal | None = None
     external_txn_id: str | None = None
 
 

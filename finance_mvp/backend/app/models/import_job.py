@@ -38,6 +38,7 @@ class ImportJob(Base):
     source_type: Mapped[ImportSourceType] = mapped_column(Enum(ImportSourceType))
     status: Mapped[ImportStatus] = mapped_column(Enum(ImportStatus), default=ImportStatus.pending, index=True)
     file_name: Mapped[str] = mapped_column(String(255))
+    file_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     storage_uri: Mapped[str] = mapped_column(String(512))
     parser_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)

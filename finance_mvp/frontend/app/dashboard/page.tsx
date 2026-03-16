@@ -80,7 +80,7 @@ export default async function DashboardPage({ searchParams }: Props) {
       <SummaryCards
         overview={overview}
         docsRequiringReview={docsRequiringReview}
-        openReviewQueue={reviewQueue.length}
+        openReviewQueue={reviewQueue.filter((item) => item.status === "pending").length}
       />
 
       {/* Charts row */}

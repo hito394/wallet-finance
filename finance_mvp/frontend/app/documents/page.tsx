@@ -5,7 +5,15 @@ import Link from "next/link";
 
 import DocumentsTable from "@/components/documents-table";
 import DocumentsUploadForm from "@/components/documents-upload-form";
-import { fetchDocuments, fetchEntities, fetchReviewQueue, type DocumentItem } from "@/lib/api";
+import {
+  fetchDocuments,
+  fetchEntities,
+  fetchReviewQueue,
+  retryDocumentParse,
+  type DocumentItem,
+  type ImportSourceType,
+  updateDocumentTypeHint,
+} from "@/lib/api";
 
 const FILTER_OPTIONS = [
   { value: "all",         label: "All" },
@@ -20,9 +28,13 @@ export default function DocumentsPage() {
   const [docs, setDocs] = useState<DocumentItem[]>([]);
   const [reviewCount, setReviewCount] = useState(0);
   const [filter, setFilter] = useState("all");
+  const [sourceTypeFilter, setSourceTypeFilter] = useState("all");
+  const [minConfidence, setMinConfidence] = useState(0);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryingDocumentId, setRetryingDocumentId] = useState<string | null>(null);
+  const [updatingTypeDocumentId, setUpdatingTypeDocumentId] = useState<string | null>(null);
 
   const load = async (eid?: string) => {
     setLoading(true);
@@ -35,7 +47,7 @@ export default function DocumentsPage() {
     if (entResult.data) setEntities(entResult.data);
     if (docsResult.data) setDocs(docsResult.data);
     else setError(docsResult.error || "Failed to load documents");
-    if (rvResult.data) setReviewCount(rvResult.data.filter((r) => r.status === "open").length);
+    if (rvResult.data) setReviewCount(rvResult.data.filter((r) => r.status === "pending").length);
     setLoading(false);
   };
 
@@ -55,6 +67,30 @@ export default function DocumentsPage() {
   };
 
   const needsReviewCount = docs.filter((d) => d.review_required).length;
+
+  const handleRetryParse = async (documentId: string) => {
+    setRetryingDocumentId(documentId);
+    setError(null);
+    const result = await retryDocumentParse(documentId, entityId);
+    setRetryingDocumentId(null);
+    if (result.error) {
+      setError(result.error || "Failed to queue re-parse");
+      return;
+    }
+    await load(entityId);
+  };
+
+  const handleMarkType = async (documentId: string, sourceType: ImportSourceType) => {
+    setUpdatingTypeDocumentId(documentId);
+    setError(null);
+    const result = await updateDocumentTypeHint(documentId, sourceType, entityId);
+    setUpdatingTypeDocumentId(null);
+    if (result.error) {
+      setError(result.error || "Failed to update type hint");
+      return;
+    }
+    await load(entityId);
+  };
 
   return (
     <div>
@@ -116,7 +152,11 @@ export default function DocumentsPage() {
         <StatChip label="Total Documents" value={docs.length} />
         <StatChip label="Needs Review" value={needsReviewCount} color={needsReviewCount > 0 ? "#b45309" : undefined} />
         <StatChip label="Queue Items" value={reviewCount} color={reviewCount > 0 ? "#dc2626" : undefined} />
-        <StatChip label="Parsed OK" value={docs.filter((d) => d.parsing_status === "parsed").length} color="#15803d" />
+        <StatChip
+          label="Parsed OK"
+          value={docs.filter((d) => d.parsing_status === "parsed" || d.parsing_status === "partial").length}
+          color="#15803d"
+        />
         <StatChip
           label="Transactions Created"
           value={docs.reduce((sum, d) => sum + (d.extracted_transaction_count || 0), 0)}
@@ -157,6 +197,35 @@ export default function DocumentsPage() {
             {opt.label}
           </button>
         ))}
+        <select
+          className="input"
+          value={sourceTypeFilter}
+          onChange={(e) => setSourceTypeFilter(e.target.value)}
+          style={{ maxWidth: 220 }}
+        >
+          <option value="all">All Source Types</option>
+          <option value="bank_statement">Bank Statement</option>
+          <option value="credit_card_statement">Credit Card Statement</option>
+          <option value="receipt">Receipt</option>
+          <option value="invoice">Invoice</option>
+          <option value="paid_invoice">Paid Invoice</option>
+          <option value="refund_confirmation">Refund Confirmation</option>
+          <option value="subscription_billing_record">Subscription Billing</option>
+          <option value="financial_document">Financial Document</option>
+          <option value="wallet_screenshot">Wallet Screenshot</option>
+          <option value="email_receipt">Email Receipt</option>
+        </select>
+        <select
+          className="input"
+          value={String(minConfidence)}
+          onChange={(e) => setMinConfidence(Number(e.target.value))}
+          style={{ maxWidth: 180 }}
+        >
+          <option value="0">Any Confidence</option>
+          <option value="0.5">50%+</option>
+          <option value="0.65">65%+</option>
+          <option value="0.8">80%+</option>
+        </select>
         <input
           type="text"
           placeholder="Search filename, merchant, issuer…"
@@ -188,7 +257,17 @@ export default function DocumentsPage() {
       {loading ? (
         <div style={{ color: "#94a3b8", padding: 32, textAlign: "center" }}>Loading…</div>
       ) : (
-        <DocumentsTable rows={docs} filter={filter} search={search} />
+        <DocumentsTable
+          rows={docs}
+          filter={filter}
+          search={search}
+          sourceTypeFilter={sourceTypeFilter}
+          minConfidence={minConfidence}
+          onRetryParse={handleRetryParse}
+          onMarkType={handleMarkType}
+          retryingDocumentId={retryingDocumentId}
+          updatingTypeDocumentId={updatingTypeDocumentId}
+        />
       )}
     </div>
   );

@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, JSON, Numeric, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,6 +36,9 @@ class PaymentStatus(str, enum.Enum):
 
 class FinancialDocument(Base):
     __tablename__ = "documents"
+    __table_args__ = (
+        UniqueConstraint("import_id", name="uq_documents_import_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
@@ -81,9 +84,10 @@ class FinancialDocument(Base):
     # Enhanced intelligence fields
     likely_issuer: Mapped[str | None] = mapped_column(String(120), nullable=True)
     source_type_hint: Mapped[str | None] = mapped_column(String(80), nullable=True)  # user-selected type
-    parsing_status: Mapped[str] = mapped_column(String(40), default="pending")  # pending|parsed|needs_review|failed
+    parsing_status: Mapped[str] = mapped_column(String(40), default="pending")  # pending|parsed|partial|needs_review|failed
     parsing_failure_reason: Mapped[str | None] = mapped_column(String(400), nullable=True)
     extracted_transaction_count: Mapped[int] = mapped_column(default=0)
+    transactions_created_count: Mapped[int] = mapped_column(default=0)
     extracted_total_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
 
     match_confidence: Mapped[float | None] = mapped_column(nullable=True)

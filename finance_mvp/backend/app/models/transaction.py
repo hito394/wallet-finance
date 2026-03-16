@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,11 +25,15 @@ class TransactionSource(str, enum.Enum):
 
 class Transaction(Base):
     __tablename__ = "transactions"
+    __table_args__ = (
+        UniqueConstraint("entity_id", "fingerprint", name="uq_transactions_entity_fingerprint"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("entities.id"), index=True)
     import_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("imports.id"), nullable=True)
+    document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True, index=True)
     external_txn_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     transaction_date: Mapped[date] = mapped_column(Date, index=True)
     posted_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -37,6 +41,7 @@ class Transaction(Base):
     merchant_normalized: Mapped[str] = mapped_column(String(255), index=True)
     description: Mapped[str] = mapped_column(String(512))
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), index=True)
+    running_balance: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     direction: Mapped[TransactionDirection] = mapped_column(Enum(TransactionDirection), index=True)
     currency: Mapped[str] = mapped_column(String(3), default="USD")
     category_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True)

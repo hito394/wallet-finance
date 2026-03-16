@@ -13,6 +13,7 @@ class ImportJobRead(BaseModel):
     source_type: ImportSourceType
     status: ImportStatus
     file_name: str
+    file_hash: str | None
     storage_uri: str
     parser_name: str | None
     metadata_json: dict

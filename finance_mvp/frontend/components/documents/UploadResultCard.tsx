@@ -78,6 +78,8 @@ export default function UploadResultCard({ doc, onDismiss }: Props) {
             </span>
           </Field>
         )}
+        <Field label="Extracted Rows">{doc.extracted_transaction_count}</Field>
+        <Field label="Transactions Created">{doc.transactions_created_count}</Field>
         {doc.source_type_hint && doc.source_type_hint !== doc.document_type && (
           <Field label="Hint vs Detected">
             <span style={{ color: "#7c3aed", fontSize: 11 }}>

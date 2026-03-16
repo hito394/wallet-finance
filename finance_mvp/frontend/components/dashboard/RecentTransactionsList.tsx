@@ -35,7 +35,7 @@ export default function RecentTransactionsList({ rows, entityId }: Props) {
             </thead>
             <tbody>
               {items.map((row) => {
-                const isCredit = row.direction === "inflow";
+                const isCredit = row.direction === "credit";
                 return (
                   <tr key={row.id}>
                     <td style={{ whiteSpace: "nowrap", color: "#5f7284" }}>{row.transaction_date}</td>

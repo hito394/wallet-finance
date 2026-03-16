@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models.category import Category
@@ -50,9 +50,25 @@ def _detect_possible_duplicate_document(db: Session, document: FinancialDocument
     return existing is not None
 
 
-def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
+def _clear_existing_review_items(db: Session, document_id) -> None:
+    db.execute(
+        delete(ReviewQueueItem).where(
+            ReviewQueueItem.document_id == document_id,
+            ReviewQueueItem.status == "pending",
+        )
+    )
+
+
+def process_import(
+    db: Session,
+    job: ImportJob,
+    local_file_path: str,
+    *,
+    force_reprocess: bool = False,
+) -> None:
     job.status = ImportStatus.processing
     job.processed_at = None
+    job.error_message = None
     db.flush()
 
     # ── Phase 1: document intelligence ────────────────────────────────────────
@@ -69,51 +85,119 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
 
         source_hint = job.source_type.value if job.source_type else None
         intelligence = analyze_financial_document(document_text, job.file_name, source_type_hint=source_hint)
-        document = FinancialDocument(
-            user_id=job.user_id,
-            entity_id=job.entity_id,
-            import_id=job.id,
-            storage_uri=job.storage_uri,
-            source_name=job.file_name,
-            document_type=intelligence.document_type,
-            document_type_confidence=intelligence.document_type_confidence,
-            classification_explanation=intelligence.classification_explanation,
-            payment_status=intelligence.payment_status,
-            is_proof_of_purchase=intelligence.is_proof_of_purchase,
-            is_billing_request=intelligence.is_billing_request,
-            is_refund_document=intelligence.is_refund_document,
-            possible_duplicate_document=False,
-            business_expense_candidate=intelligence.business_expense_candidate,
-            reimbursable_candidate=intelligence.reimbursable_candidate,
-            tax_relevant_candidate=intelligence.tax_relevant_candidate,
-            retention_recommended=intelligence.retention_recommended,
-            review_required=False,          # set properly after extraction
-            review_reason=None,             # set properly after extraction
-            merchant_name=intelligence.merchant_name,
-            merchant_address=intelligence.merchant_address,
-            purchase_date=intelligence.purchase_date,
-            invoice_date=intelligence.invoice_date,
-            due_date=intelligence.due_date,
-            subtotal_amount=intelligence.subtotal_amount,
-            total_amount=intelligence.total_amount,
-            tax_amount=intelligence.tax_amount,
-            currency=intelligence.currency,
-            payment_method=intelligence.payment_method,
-            invoice_number=intelligence.invoice_number,
-            order_number=intelligence.order_number,
-            line_items=intelligence.line_items,
-            raw_text=intelligence.raw_text,
-            extraction_confidence=intelligence.extraction_confidence,
-            # intelligence fields — parsing_status stays pending until Phase 2 finishes
-            likely_issuer=intelligence.likely_issuer,
-            source_type_hint=intelligence.source_type_hint,
-            parsing_status="pending",
-            parsing_failure_reason=None,
-            raw_text_preview=intelligence.raw_text_preview,
-            extracted_transaction_count=0,
-            extracted_total_amount=None,
+
+        existing_document = db.scalar(
+            select(FinancialDocument).where(FinancialDocument.import_id == job.id)
         )
-        db.add(document)
+
+        if existing_document and not force_reprocess and existing_document.parsing_status in {
+            "parsed",
+            "partial",
+            "needs_review",
+            "failed",
+        }:
+            job.status = ImportStatus.completed
+            job.processed_at = datetime.utcnow()
+            job.metadata_json = {
+                **(job.metadata_json or {}),
+                "idempotent_reuse": True,
+                "document_id": str(existing_document.id),
+            }
+            db.commit()
+            return
+
+        if existing_document:
+            document = existing_document
+            document.storage_uri = job.storage_uri
+            document.source_name = job.file_name
+            document.document_type = intelligence.document_type
+            document.document_type_confidence = intelligence.document_type_confidence
+            document.classification_explanation = intelligence.classification_explanation
+            document.payment_status = intelligence.payment_status
+            document.is_proof_of_purchase = intelligence.is_proof_of_purchase
+            document.is_billing_request = intelligence.is_billing_request
+            document.is_refund_document = intelligence.is_refund_document
+            document.business_expense_candidate = intelligence.business_expense_candidate
+            document.reimbursable_candidate = intelligence.reimbursable_candidate
+            document.tax_relevant_candidate = intelligence.tax_relevant_candidate
+            document.retention_recommended = intelligence.retention_recommended
+            document.merchant_name = intelligence.merchant_name
+            document.merchant_address = intelligence.merchant_address
+            document.purchase_date = intelligence.purchase_date
+            document.invoice_date = intelligence.invoice_date
+            document.due_date = intelligence.due_date
+            document.subtotal_amount = intelligence.subtotal_amount
+            document.total_amount = intelligence.total_amount
+            document.tax_amount = intelligence.tax_amount
+            document.currency = intelligence.currency
+            document.payment_method = intelligence.payment_method
+            document.invoice_number = intelligence.invoice_number
+            document.order_number = intelligence.order_number
+            document.line_items = intelligence.line_items
+            document.raw_text = intelligence.raw_text
+            document.extraction_confidence = intelligence.extraction_confidence
+            document.likely_issuer = intelligence.likely_issuer
+            document.source_type_hint = intelligence.source_type_hint
+            document.raw_text_preview = intelligence.raw_text_preview
+            document.parsing_status = "pending"
+            document.parsing_failure_reason = None
+            document.review_required = False
+            document.review_reason = None
+            document.extracted_transaction_count = 0
+            document.transactions_created_count = 0
+            document.extracted_total_amount = None
+            document.match_confidence = None
+            document.match_reason = None
+            document.matched_by_amount = False
+            document.matched_by_merchant = False
+            document.matched_by_date = False
+        else:
+            document = FinancialDocument(
+                user_id=job.user_id,
+                entity_id=job.entity_id,
+                import_id=job.id,
+                storage_uri=job.storage_uri,
+                source_name=job.file_name,
+                document_type=intelligence.document_type,
+                document_type_confidence=intelligence.document_type_confidence,
+                classification_explanation=intelligence.classification_explanation,
+                payment_status=intelligence.payment_status,
+                is_proof_of_purchase=intelligence.is_proof_of_purchase,
+                is_billing_request=intelligence.is_billing_request,
+                is_refund_document=intelligence.is_refund_document,
+                possible_duplicate_document=False,
+                business_expense_candidate=intelligence.business_expense_candidate,
+                reimbursable_candidate=intelligence.reimbursable_candidate,
+                tax_relevant_candidate=intelligence.tax_relevant_candidate,
+                retention_recommended=intelligence.retention_recommended,
+                review_required=False,
+                review_reason=None,
+                merchant_name=intelligence.merchant_name,
+                merchant_address=intelligence.merchant_address,
+                purchase_date=intelligence.purchase_date,
+                invoice_date=intelligence.invoice_date,
+                due_date=intelligence.due_date,
+                subtotal_amount=intelligence.subtotal_amount,
+                total_amount=intelligence.total_amount,
+                tax_amount=intelligence.tax_amount,
+                currency=intelligence.currency,
+                payment_method=intelligence.payment_method,
+                invoice_number=intelligence.invoice_number,
+                order_number=intelligence.order_number,
+                line_items=intelligence.line_items,
+                raw_text=intelligence.raw_text,
+                extraction_confidence=intelligence.extraction_confidence,
+                likely_issuer=intelligence.likely_issuer,
+                source_type_hint=intelligence.source_type_hint,
+                parsing_status="pending",
+                parsing_failure_reason=None,
+                raw_text_preview=intelligence.raw_text_preview,
+                extracted_transaction_count=0,
+                transactions_created_count=0,
+                extracted_total_amount=None,
+            )
+            db.add(document)
+
         db.flush()
         document.possible_duplicate_document = _detect_possible_duplicate_document(db, document)
     except Exception as exc:  # noqa: BLE001
@@ -130,6 +214,14 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
     # commit the document so it appears in the UI; only the job is marked failed.
     try:
         if job.source_type in {ImportSourceType.bank_statement, ImportSourceType.credit_card_statement}:
+            if force_reprocess:
+                db.execute(
+                    delete(Transaction).where(
+                        Transaction.entity_id == job.entity_id,
+                        Transaction.import_id == job.id,
+                    )
+                )
+
             parser_confidence = 0.9
             summary_without_detail = False
             suspicious_account_number_rows = 0
@@ -157,6 +249,7 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
 
             created_count = 0
             duplicate_count = 0
+            same_import_existing_count = 0
             extracted_amount_total = Decimal("0")
             for item in parsed_transactions:
                 merchant_normalized = normalize_merchant(item.merchant_raw)
@@ -172,13 +265,17 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
 
                 duplicate = find_duplicate_by_fingerprint(db, job.entity_id, fingerprint)
                 if duplicate:
-                    duplicate_count += 1
+                    if duplicate.import_id == job.id:
+                        same_import_existing_count += 1
+                    else:
+                        duplicate_count += 1
                     continue
 
                 tx = Transaction(
                     user_id=job.user_id,
                     entity_id=job.entity_id,
                     import_id=job.id,
+                    document_id=document.id,
                     external_txn_id=item.external_txn_id,
                     transaction_date=item.transaction_date,
                     posted_date=item.posted_date,
@@ -186,6 +283,7 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
                     merchant_normalized=merchant_normalized,
                     description=item.description,
                     amount=item.amount,
+                    running_balance=item.running_balance,
                     direction=item.direction,
                     currency=item.currency,
                     category_id=category.id,
@@ -198,6 +296,11 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
 
             parsed_row_count = len(parsed_transactions)
 
+            if parsed_row_count == 0:
+                extracted_amount_total = Decimal("0")
+            else:
+                extracted_amount_total = sum((item.amount or Decimal("0") for item in parsed_transactions), Decimal("0"))
+
             # Statements generate rows and may include partial extraction confidence.
             document.match_confidence = parser_confidence
             document.match_reason = (
@@ -209,18 +312,19 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
             document.extraction_confidence = max(document.extraction_confidence, parser_confidence)
 
             # Persist extraction outcome
-            document.extracted_transaction_count = created_count
-            document.extracted_total_amount = extracted_amount_total if created_count > 0 else None
+            document.extracted_transaction_count = parsed_row_count
+            document.transactions_created_count = created_count
+            document.extracted_total_amount = extracted_amount_total if parsed_row_count > 0 else None
 
             if parsed_row_count > 0 and created_count > 0:
                 if parser_confidence < 0.65:
-                    document.parsing_status = "needs_review"
+                    document.parsing_status = "partial"
                     document.parsing_failure_reason = (
                         "low_confidence_statement_extraction: "
                         "Transactions extracted but parser confidence is low"
                     )
                 elif duplicate_count > 0 or created_count < parsed_row_count:
-                    document.parsing_status = "needs_review"
+                    document.parsing_status = "partial"
                     document.parsing_failure_reason = (
                         "partial_statement_parse: "
                         "Some rows were skipped as duplicates or could not be saved"
@@ -228,6 +332,9 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
                 else:
                     document.parsing_status = "parsed"
                     document.parsing_failure_reason = None
+            elif parsed_row_count > 0 and created_count == 0 and same_import_existing_count > 0:
+                document.parsing_status = "parsed"
+                document.parsing_failure_reason = None
             elif parsed_row_count > 0 and created_count == 0:
                 document.parsing_status = "needs_review"
                 document.parsing_failure_reason = (
@@ -255,6 +362,7 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
             job.metadata_json = {
                 "created_transactions": created_count,
                 "duplicate_transactions": duplicate_count,
+                "same_import_existing_transactions": same_import_existing_count,
                 "parsed_statement_rows": parsed_row_count,
                 "parser_confidence": parser_confidence,
                 "transactions_created": created_count > 0,
@@ -293,6 +401,7 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
 
             # Receipts: no transaction rows to count, but OCR extraction succeeded
             document.extracted_transaction_count = 0
+            document.transactions_created_count = 0
             document.extracted_total_amount = None
             if parsed_receipt.total_amount:
                 document.parsing_status = "parsed"
@@ -308,6 +417,9 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
             }
             job.parser_name = parser_name
 
+        _clear_existing_review_items(db, document.id)
+        document.review_required = False
+        document.review_reason = None
         need_review, reason_code, reason_text = derive_review_reason(document)
         if need_review and reason_code and reason_text:
             db.add(
@@ -321,7 +433,8 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
             )
             document.review_required = True
             document.review_reason = reason_text
-            # If review is needed and parsing was "parsed", downgrade to needs_review
+            # Keep partial status when available; parsed documents with a review issue
+            # are downgraded to needs_review.
             if document.parsing_status == "parsed":
                 document.parsing_status = "needs_review"
 

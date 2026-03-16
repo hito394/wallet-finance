@@ -11,7 +11,7 @@ type Props = {
 
 export default function TransactionsTable({ rows }: Props) {
   const [query, setQuery] = useState("");
-  const [direction, setDirection] = useState<"all" | "inflow" | "outflow">("all");
+  const [direction, setDirection] = useState<"all" | "debit" | "credit" | "transfer">("all");
 
   const filteredRows = useMemo(() => {
     return rows.filter((row) => {
@@ -38,8 +38,9 @@ export default function TransactionsTable({ rows }: Props) {
         />
         <select className="input" value={direction} onChange={(event) => setDirection(event.target.value as typeof direction)}>
           <option value="all">All directions</option>
-          <option value="outflow">Outflow</option>
-          <option value="inflow">Inflow</option>
+          <option value="debit">Debit</option>
+          <option value="credit">Credit</option>
+          <option value="transfer">Transfer</option>
         </select>
       </div>
 
@@ -67,7 +68,7 @@ export default function TransactionsTable({ rows }: Props) {
                     <td>{row.merchant_normalized || row.merchant_raw}</td>
                     <td>{row.description || "-"}</td>
                     <td>
-                      <span className={`pill ${row.direction === "outflow" ? "warn" : "success"}`}>{row.direction}</span>
+                      <span className={`pill ${row.direction === "debit" ? "warn" : "success"}`}>{row.direction}</span>
                     </td>
                     <td>{row.category_id ? row.category_id.slice(0, 8) : "Uncategorized"}</td>
                     <td className="amount-col">

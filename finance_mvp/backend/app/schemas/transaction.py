@@ -10,11 +10,13 @@ from app.models.transaction import TransactionDirection, TransactionSource
 class TransactionRead(BaseModel):
     id: uuid.UUID
     entity_id: uuid.UUID
+    document_id: uuid.UUID | None
     transaction_date: date
     merchant_raw: str
     merchant_normalized: str
     description: str
     amount: Decimal
+    running_balance: Decimal | None
     direction: TransactionDirection
     currency: str
     source: TransactionSource
