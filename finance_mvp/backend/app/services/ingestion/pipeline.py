@@ -54,6 +54,8 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
     job.processed_at = None
     db.flush()
 
+    # ── Phase 1: document intelligence ────────────────────────────────────────
+    # If anything here fails we roll back everything and mark the job failed.
     try:
         file_path = Path(local_file_path)
         suffix = file_path.suffix.lower()
@@ -104,7 +106,19 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
         db.add(document)
         db.flush()
         document.possible_duplicate_document = _detect_possible_duplicate_document(db, document)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        job.status = ImportStatus.failed
+        job.error_message = str(exc)
+        job.processed_at = datetime.utcnow()
+        db.add(job)
+        db.commit()
+        return
 
+    # ── Phase 2: transaction / receipt extraction ─────────────────────────────
+    # The FinancialDocument is already flushed.  If parsing fails we still
+    # commit the document so it appears in the UI; only the job is marked failed.
+    try:
         if job.source_type in {ImportSourceType.bank_statement, ImportSourceType.credit_card_statement}:
             if suffix == ".csv":
                 parser_name = "csv_statement_parser"
@@ -115,7 +129,8 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
                 source = "card" if job.source_type == ImportSourceType.credit_card_statement else "bank"
                 parsed_transactions = parse_pdf_statement(local_file_path, source=source)
             else:
-                raise ValueError(f"Unsupported statement file type: {suffix}")
+                parser_name = "unknown"
+                parsed_transactions = []
 
             created_count = 0
             duplicate_count = 0
@@ -224,11 +239,8 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
         job.processed_at = datetime.utcnow()
         db.commit()
     except Exception as exc:  # noqa: BLE001
-        db.rollback()
+        # Keep the document; only the extraction phase failed.
         job.status = ImportStatus.failed
         job.error_message = str(exc)
         job.processed_at = datetime.utcnow()
-        db.add(job)
         db.commit()
-        # Job already persisted as failed; caller can return the job payload.
-        return

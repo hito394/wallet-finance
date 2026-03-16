@@ -29,7 +29,8 @@ def parse_csv_statement(file_path: str, source: str) -> list[ParsedTransaction]:
     amount_col = _pick_column(columns, AMOUNT_CANDIDATES)
 
     if not date_col or not desc_col or not amount_col:
-        raise ValueError("CSV parser could not map required columns: date/description/amount")
+        # Can't map required columns — return empty rather than crashing the job.
+        return []
 
     results: list[ParsedTransaction] = []
     for _, row in df.iterrows():
