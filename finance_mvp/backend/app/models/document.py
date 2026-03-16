@@ -75,7 +75,14 @@ class FinancialDocument(Base):
     order_number: Mapped[str | None] = mapped_column(String(120), nullable=True)
     line_items: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_text_preview: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     extraction_confidence: Mapped[float] = mapped_column(default=0.0)
+
+    # Enhanced intelligence fields
+    likely_issuer: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    source_type_hint: Mapped[str | None] = mapped_column(String(80), nullable=True)  # user-selected type
+    parsing_status: Mapped[str] = mapped_column(String(40), default="pending")  # pending|ok|partial|failed
+    parsing_failure_reason: Mapped[str | None] = mapped_column(String(400), nullable=True)
 
     match_confidence: Mapped[float | None] = mapped_column(nullable=True)
     match_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)

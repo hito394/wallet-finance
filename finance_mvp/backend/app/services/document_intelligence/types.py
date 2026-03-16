@@ -35,3 +35,9 @@ class DocumentIntelligenceResult:
     line_items: list[dict]
     raw_text: str
     extraction_confidence: float
+    # Enhanced fields
+    likely_issuer: str | None = None
+    source_type_hint: str | None = None
+    parsing_status: str = "ok"  # ok | partial | failed
+    parsing_failure_reason: str | None = None
+    raw_text_preview: str | None = None

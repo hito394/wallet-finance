@@ -3,21 +3,30 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { uploadDocument, type ImportSourceType } from "@/lib/api";
+import {
+  uploadDocument,
+  pollImportJob,
+  fetchDocumentsByImportId,
+  type DocumentItem,
+  type ImportSourceType,
+} from "@/lib/api";
 import StatusMessage from "@/components/status-message";
+import UploadResultCard from "@/components/documents/UploadResultCard";
 
-const SOURCE_TYPES: ImportSourceType[] = [
-  "bank_statement",
-  "credit_card_statement",
-  "receipt",
-  "invoice",
-  "paid_invoice",
-  "refund_confirmation",
-  "subscription_billing_record",
-  "financial_document",
-  "wallet_screenshot",
-  "email_receipt",
-];
+const SOURCE_TYPE_LABELS: Record<ImportSourceType, string> = {
+  bank_statement:              "Bank Statement",
+  credit_card_statement:       "Credit Card Statement",
+  receipt:                     "Receipt",
+  invoice:                     "Invoice",
+  paid_invoice:                "Paid Invoice",
+  refund_confirmation:         "Refund Confirmation",
+  subscription_billing_record: "Subscription Billing Record",
+  financial_document:          "Other Financial Document",
+  wallet_screenshot:           "Wallet / App Screenshot",
+  email_receipt:               "Email Receipt",
+};
+
+const SOURCE_TYPES = Object.keys(SOURCE_TYPE_LABELS) as ImportSourceType[];
 
 type Props = {
   entityId?: string;
@@ -29,14 +38,18 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [sourceType, setSourceType] = useState<ImportSourceType>("bank_statement");
   const [isUploading, setIsUploading] = useState(false);
-  const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [processedDoc, setProcessedDoc] = useState<DocumentItem | null>(null);
 
   const canSubmit = useMemo(() => !!file && !isUploading, [file, isUploading]);
 
   return (
     <div className="panel form-panel">
       <h3>Upload Financial Document</h3>
-      <p className="muted">Connect a real ingestion flow: choose a source type and upload receipt/invoice/statement files.</p>
+      <p className="muted">
+        Choose a source type, then upload a receipt, invoice, or statement. The AI pipeline will
+        classify, extract, and tag the document automatically.
+      </p>
 
       <div className="form-grid">
         <div>
@@ -48,7 +61,7 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
           >
             {SOURCE_TYPES.map((type) => (
               <option value={type} key={type}>
-                {type}
+                {SOURCE_TYPE_LABELS[type]}
               </option>
             ))}
           </select>
@@ -59,7 +72,11 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
           <input
             className="input"
             type="file"
-            onChange={(event) => setFile(event.target.files?.[0] || null)}
+            onChange={(event) => {
+              setFile(event.target.files?.[0] || null);
+              setProcessedDoc(null);
+              setError(null);
+            }}
             accept=".pdf,.csv,.png,.jpg,.jpeg"
           />
         </div>
@@ -73,32 +90,53 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
           onClick={async () => {
             if (!file) return;
             setIsUploading(true);
-            setMessage(null);
-            const result = await uploadDocument(file, sourceType, entityId);
-            setIsUploading(false);
+            setError(null);
+            setProcessedDoc(null);
 
-            if (result.error || !result.data) {
-              setMessage({ tone: "error", text: result.error || "Upload failed" });
+            // Step 1: upload → get import job ID
+            const uploadResult = await uploadDocument(file, sourceType, entityId);
+            if (uploadResult.error || !uploadResult.data) {
+              setIsUploading(false);
+              setError(uploadResult.error || "Upload failed");
               return;
             }
 
-            setMessage({ tone: "success", text: `Uploaded as import job ${result.data.id.slice(0, 8)}.` });
+            const jobId = uploadResult.data.id;
+
+            // Step 2: poll until job completes (up to 15 s)
+            const jobResult = await pollImportJob(jobId, entityId, 15_000);
+
+            // Step 3: regardless of job success/fail, fetch the document for this import
+            const docsResult = await fetchDocumentsByImportId(jobId, entityId);
+            const doc = docsResult.data?.[0] ?? null;
+
+            setIsUploading(false);
             setFile(null);
+            setProcessedDoc(doc);
+
+            if (jobResult.data?.status === "failed" && !doc) {
+              setError(jobResult.data.error_message || "Processing failed — no document was created.");
+            }
+
             onUploaded?.();
             router.refresh();
           }}
         >
-          {isUploading ? "Uploading..." : "Upload"}
+          {isUploading ? "Processing…" : "Upload"}
         </button>
       </div>
 
-      {message && (
-        <StatusMessage
-          tone={message.tone === "success" ? "success" : "error"}
-          title={message.tone === "success" ? "Upload completed" : "Upload failed"}
-          detail={message.text}
+      {error && (
+        <StatusMessage tone="error" title="Upload failed" detail={error} />
+      )}
+
+      {processedDoc && (
+        <UploadResultCard
+          doc={processedDoc}
+          onDismiss={() => setProcessedDoc(null)}
         />
       )}
     </div>
   );
 }
+

@@ -31,6 +31,12 @@ class FinancialDocumentRead(BaseModel):
     extraction_confidence: float
     match_confidence: float | None
     match_reason: str | None
+    # enriched intelligence fields
+    likely_issuer: str | None = None
+    source_type_hint: str | None = None
+    parsing_status: str = "pending"
+    parsing_failure_reason: str | None = None
+    raw_text_preview: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

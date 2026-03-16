@@ -5,8 +5,15 @@ from app.services.document_intelligence.relevance import infer_relevance
 from app.services.document_intelligence.types import DocumentIntelligenceResult
 
 
-def analyze_financial_document(raw_text: str, filename: str) -> DocumentIntelligenceResult:
-    doc_type, type_confidence, explanation = classify_document_type(raw_text, filename)
+def analyze_financial_document(
+    raw_text: str,
+    filename: str,
+    source_type_hint: str | None = None,
+) -> DocumentIntelligenceResult:
+    doc_type, type_confidence, explanation, classifier_review_reason = classify_document_type(
+        raw_text, filename, source_type_hint=source_type_hint
+    )
+    likely_issuer = _detect_issuer_from_classifier(raw_text)
     extracted = extract_financial_fields(raw_text)
     payment_status = infer_payment_status(raw_text, doc_type)
     relevance = infer_relevance(doc_type, extracted.get("merchant_name"), raw_text)
@@ -15,10 +22,17 @@ def analyze_financial_document(raw_text: str, filename: str) -> DocumentIntellig
     is_billing_request = doc_type in {FinancialDocumentType.invoice}
     is_refund_document = doc_type == FinancialDocumentType.refund_confirmation or payment_status.value == "refunded"
 
-    review_required = relevance["review_required"] or extracted["extraction_confidence"] < 0.5
-    review_reason = relevance["review_reason"]
-    if extracted["extraction_confidence"] < 0.5:
-        review_reason = "Low extraction confidence"
+    review_required = bool(
+        relevance["review_required"]
+        or extracted["extraction_confidence"] < 0.5
+        or classifier_review_reason
+    )
+    review_reason = classifier_review_reason or relevance["review_reason"]
+    if extracted["extraction_confidence"] < 0.5 and not review_reason:
+        review_reason = "low_extraction_confidence"
+
+    parsing_status = "ok" if not review_required else ("partial" if doc_type != FinancialDocumentType.unknown_financial_document else "failed")
+    raw_text_preview = raw_text[:1800].strip() if raw_text else None
 
     return DocumentIntelligenceResult(
         document_type=doc_type,
@@ -49,4 +63,14 @@ def analyze_financial_document(raw_text: str, filename: str) -> DocumentIntellig
         line_items=extracted["line_items"],
         raw_text=raw_text,
         extraction_confidence=extracted["extraction_confidence"],
+        likely_issuer=likely_issuer,
+        source_type_hint=source_type_hint,
+        parsing_status=parsing_status,
+        parsing_failure_reason=review_reason if parsing_status == "failed" else None,
+        raw_text_preview=raw_text_preview,
     )
+
+
+def _detect_issuer_from_classifier(text: str) -> str | None:
+    from app.services.document_intelligence.classifier import _detect_issuer
+    return _detect_issuer(text)

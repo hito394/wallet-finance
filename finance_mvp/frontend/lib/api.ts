@@ -73,6 +73,12 @@ export type DocumentItem = {
   currency: string;
   extraction_confidence: number;
   match_confidence: number | null;
+  // enriched intelligence
+  likely_issuer: string | null;
+  source_type_hint: string | null;
+  parsing_status: string;
+  parsing_failure_reason: string | null;
+  raw_text_preview: string | null;
   created_at: string;
 };
 
@@ -213,6 +219,39 @@ export async function fetchTransactions(entityId?: string, year?: number, month?
 
 export async function fetchDocuments(entityId?: string): Promise<ApiResult<DocumentItem[]>> {
   return requestJson<DocumentItem[]>("/documents", undefined, { entityId });
+}
+
+export async function fetchDocumentsByImportId(
+  importId: string,
+  entityId?: string,
+): Promise<ApiResult<DocumentItem[]>> {
+  return requestJson<DocumentItem[]>(`/documents?import_id=${encodeURIComponent(importId)}`, undefined, { entityId });
+}
+
+export async function fetchImportJob(jobId: string, entityId?: string): Promise<ApiResult<ImportJob>> {
+  return requestJson<ImportJob>(`/imports/${encodeURIComponent(jobId)}`, undefined, { entityId });
+}
+
+/**
+ * Poll an import job until it reaches a terminal state (completed|failed) or the
+ * timeout elapses. Returns the final job state.
+ */
+export async function pollImportJob(
+  jobId: string,
+  entityId?: string,
+  maxMs = 15_000,
+  intervalMs = 1_500,
+): Promise<ApiResult<ImportJob>> {
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    const result = await fetchImportJob(jobId, entityId);
+    if (result.error) return result;
+    if (result.data && (result.data.status === "completed" || result.data.status === "failed")) {
+      return result;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  return fetchImportJob(jobId, entityId); // last attempt
 }
 
 export async function fetchReviewQueue(entityId?: string): Promise<ApiResult<ReviewQueueItem[]>> {

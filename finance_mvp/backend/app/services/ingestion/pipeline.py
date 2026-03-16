@@ -66,7 +66,8 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
         elif suffix == ".csv":
             document_text = f"statement file {job.file_name}"
 
-        intelligence = analyze_financial_document(document_text, job.file_name)
+        source_hint = job.source_type.value if job.source_type else None
+        intelligence = analyze_financial_document(document_text, job.file_name, source_type_hint=source_hint)
         document = FinancialDocument(
             user_id=job.user_id,
             entity_id=job.entity_id,
@@ -102,6 +103,12 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
             line_items=intelligence.line_items,
             raw_text=intelligence.raw_text,
             extraction_confidence=intelligence.extraction_confidence,
+            # new intelligence fields
+            likely_issuer=intelligence.likely_issuer,
+            source_type_hint=intelligence.source_type_hint,
+            parsing_status=intelligence.parsing_status,
+            parsing_failure_reason=intelligence.parsing_failure_reason,
+            raw_text_preview=intelligence.raw_text_preview,
         )
         db.add(document)
         db.flush()
