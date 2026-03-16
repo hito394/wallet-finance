@@ -3,7 +3,6 @@
 import { Fragment, useState } from "react";
 
 import type { DocumentItem } from "@/lib/api";
-import { asNumber } from "@/lib/api";
 import ConfidenceBadge from "@/components/documents/ConfidenceBadge";
 import DocumentStatusBadge from "@/components/documents/DocumentStatusBadge";
 import DocumentTypeBadge from "@/components/documents/DocumentTypeBadge";
@@ -31,9 +30,14 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
 export default function DocumentsTable({ rows, filter, search }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const isStatement = (row: DocumentItem) =>
+    row.document_type === "bank_statement" ||
+    row.document_type === "credit_card_statement" ||
+    row.source_type_hint === "bank_statement" ||
+    row.source_type_hint === "credit_card_statement";
+
   const visible = rows.filter((row) => {
     if (filter === "review" && !row.review_required) return false;
-    if (filter === "ok" && row.review_required) return false;
     if (filter === "failed" && row.parsing_status !== "failed") return false;
     if (filter === "parsed" && row.parsing_status !== "parsed") return false;
     if (search) {
@@ -71,6 +75,7 @@ export default function DocumentsTable({ rows, filter, search }: Props) {
               <th>Parse Status</th>
               <th>Confidence</th>
               <th style={{ textAlign: "right" }}>Tx Count</th>
+              <th>Transactions Created</th>
               <th>Review Reason</th>
               <th>Created</th>
             </tr>
@@ -128,12 +133,21 @@ export default function DocumentsTable({ rows, filter, search }: Props) {
                     </td>
                     {/* Extracted transaction count — shows 0/n or "—" for receipts */}
                     <td style={{ textAlign: "right", fontWeight: 600, fontSize: 13 }}>
-                      {row.extracted_transaction_count > 0 ? (
+                      {isStatement(row) && row.extracted_transaction_count > 0 ? (
                         <span style={{ color: "#15803d" }}>{row.extracted_transaction_count}</span>
+                      ) : isStatement(row) ? (
+                        <span style={{ color: "#94a3b8" }}>0</span>
                       ) : row.parsing_status === "parsed" ? (
                         <span style={{ color: "#94a3b8" }}>—</span>
                       ) : (
                         <span style={{ color: "#94a3b8" }}>0</span>
+                      )}
+                    </td>
+                    <td style={{ fontSize: 11, fontWeight: 600 }}>
+                      {row.extracted_transaction_count > 0 ? (
+                        <span style={{ color: "#15803d" }}>Yes</span>
+                      ) : (
+                        <span style={{ color: "#94a3b8" }}>No</span>
                       )}
                     </td>
                     {/* Review reason (short) */}

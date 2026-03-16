@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 
 from sqlalchemy import select
@@ -18,7 +19,7 @@ from app.services.matching.receipt_transaction_matcher import match_receipt_to_t
 from app.services.matching.document_cross_validator import cross_validate_document_with_transactions
 from app.services.normalization.merchant_normalizer import normalize_merchant
 from app.services.parsers.csv_statement_parser import parse_csv_statement
-from app.services.parsers.pdf_statement_parser import parse_pdf_statement
+from app.services.parsers.pdf_statement_parser import parse_pdf_statement_with_diagnostics
 from app.services.parsers.receipt_ocr import extract_text, parse_receipt
 from app.utils.fingerprint import transaction_fingerprint
 
@@ -129,6 +130,9 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
     # commit the document so it appears in the UI; only the job is marked failed.
     try:
         if job.source_type in {ImportSourceType.bank_statement, ImportSourceType.credit_card_statement}:
+            parser_confidence = 0.9
+            summary_without_detail = False
+            suspicious_account_number_rows = 0
             if suffix == ".csv":
                 parser_name = "csv_statement_parser"
                 source = "card" if job.source_type == ImportSourceType.credit_card_statement else "bank"
@@ -136,14 +140,24 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
             elif suffix == ".pdf":
                 parser_name = "pdf_statement_parser"
                 source = "card" if job.source_type == ImportSourceType.credit_card_statement else "bank"
-                parsed_transactions = parse_pdf_statement(local_file_path, source=source)
+                parsed_transactions, statement_diagnostics = parse_pdf_statement_with_diagnostics(
+                    local_file_path,
+                    source=source,
+                )
+                parser_confidence = statement_diagnostics.parser_confidence
+                summary_without_detail = (
+                    statement_diagnostics.summary_section_hits > 0
+                    and statement_diagnostics.detail_section_hits == 0
+                )
+                suspicious_account_number_rows = statement_diagnostics.suspicious_account_number_rows
             else:
                 parser_name = "unknown"
                 parsed_transactions = []
+                parser_confidence = 0.0
 
             created_count = 0
             duplicate_count = 0
-            extracted_amount_total = 0
+            extracted_amount_total = Decimal("0")
             for item in parsed_transactions:
                 merchant_normalized = normalize_merchant(item.merchant_raw)
                 category_result = categorize_transaction(item.merchant_raw, item.description)
@@ -180,34 +194,70 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
                 )
                 db.add(tx)
                 created_count += 1
-                extracted_amount_total += float(item.amount or 0)
+                extracted_amount_total += item.amount or Decimal("0")
 
-            # Statements generate transactions — they don't match a single receipt.
-            # Set match_confidence=1.0 so review_queue_rules won't flag "unmatched".
-            document.match_confidence = 1.0
-            document.match_reason = f"statement: {created_count} transactions extracted"
+            parsed_row_count = len(parsed_transactions)
+
+            # Statements generate rows and may include partial extraction confidence.
+            document.match_confidence = parser_confidence
+            document.match_reason = (
+                f"statement_rows={parsed_row_count} created={created_count} duplicates={duplicate_count}"
+            )
             document.matched_by_amount = created_count > 0
             document.matched_by_merchant = False
-            document.matched_by_date = created_count > 0
+            document.matched_by_date = parsed_row_count > 0
+            document.extraction_confidence = max(document.extraction_confidence, parser_confidence)
 
             # Persist extraction outcome
             document.extracted_transaction_count = created_count
             document.extracted_total_amount = extracted_amount_total if created_count > 0 else None
 
-            if created_count > 0:
-                document.parsing_status = "parsed"
-                document.parsing_failure_reason = None
-            elif parsed_transactions is not None and len(parsed_transactions) == 0:
-                # Parser ran but found zero rows (empty file / unsupported layout)
+            if parsed_row_count > 0 and created_count > 0:
+                if parser_confidence < 0.65:
+                    document.parsing_status = "needs_review"
+                    document.parsing_failure_reason = (
+                        "low_confidence_statement_extraction: "
+                        "Transactions extracted but parser confidence is low"
+                    )
+                elif duplicate_count > 0 or created_count < parsed_row_count:
+                    document.parsing_status = "needs_review"
+                    document.parsing_failure_reason = (
+                        "partial_statement_parse: "
+                        "Some rows were skipped as duplicates or could not be saved"
+                    )
+                else:
+                    document.parsing_status = "parsed"
+                    document.parsing_failure_reason = None
+            elif parsed_row_count > 0 and created_count == 0:
                 document.parsing_status = "needs_review"
-                document.parsing_failure_reason = "No transaction rows found in file"
+                document.parsing_failure_reason = (
+                    "partial_statement_parse: "
+                    "Rows were extracted but no new transactions were created"
+                )
+            elif summary_without_detail:
+                document.parsing_status = "failed"
+                document.parsing_failure_reason = (
+                    "statement_summary_detected_without_detail_rows: "
+                    "Summary sections found without transaction detail rows"
+                )
+            elif suspicious_account_number_rows > 0:
+                document.parsing_status = "failed"
+                document.parsing_failure_reason = (
+                    "account_number_misread_as_merchant: "
+                    "Account-number-like tokens were detected instead of merchant rows"
+                )
             else:
-                document.parsing_status = "needs_review"
-                document.parsing_failure_reason = "Parser returned no data"
+                document.parsing_status = "failed"
+                document.parsing_failure_reason = (
+                    "missing_transaction_rows: No transaction rows were extracted from statement"
+                )
 
             job.metadata_json = {
                 "created_transactions": created_count,
                 "duplicate_transactions": duplicate_count,
+                "parsed_statement_rows": parsed_row_count,
+                "parser_confidence": parser_confidence,
+                "transactions_created": created_count > 0,
                 "document_type": document.document_type.value,
             }
             job.parser_name = parser_name

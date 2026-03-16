@@ -17,7 +17,7 @@ export default function DocumentReviewDrawer({ doc, onClose }: Props) {
 
   return (
     <tr>
-      <td colSpan={9} style={{ padding: 0 }}>
+      <td colSpan={10} style={{ padding: 0 }}>
         <div
           style={{
             background: "#f8fafc",
