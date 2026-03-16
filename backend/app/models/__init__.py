@@ -1,0 +1,21 @@
+"""
+全モデルをここからエクスポート（Alembicのマイグレーション検出用）
+"""
+from app.database import Base  # noqa: F401
+from app.models.user import User  # noqa: F401
+from app.models.category import Category  # noqa: F401
+from app.models.import_record import ImportRecord, ImportRow  # noqa: F401
+from app.models.transaction import Transaction  # noqa: F401
+from app.models.receipt import Receipt  # noqa: F401
+from app.models.transaction_match import TransactionMatch  # noqa: F401
+
+__all__ = [
+    "Base",
+    "User",
+    "Category",
+    "ImportRecord",
+    "ImportRow",
+    "Transaction",
+    "Receipt",
+    "TransactionMatch",
+]

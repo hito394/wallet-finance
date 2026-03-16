@@ -1,0 +1,68 @@
+/* Google Fonts - Noto Sans JP + Inter */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-brand: 67 97 238;
+    --color-surface: 248 249 252;
+  }
+
+  body {
+    @apply bg-surface text-gray-800 antialiased;
+    font-feature-settings: "kern" 1;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  /* カード */
+  .card {
+    @apply bg-white rounded-2xl border border-gray-100 shadow-sm;
+  }
+
+  /* プライマリボタン */
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-xl
+           bg-brand-500 text-white font-medium text-sm
+           hover:bg-brand-600 active:bg-brand-700
+           transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* セカンダリボタン */
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-xl
+           bg-white text-gray-700 font-medium text-sm border border-gray-200
+           hover:bg-gray-50 active:bg-gray-100
+           transition-colors duration-150;
+  }
+
+  /* バッジ */
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  /* テーブルセル */
+  .td {
+    @apply px-4 py-3 text-sm text-gray-700 whitespace-nowrap;
+  }
+}
+
+/* スクロールバーのスタイル */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 999px;
+}

@@ -1,0 +1,88 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: finance-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: finance
+      POSTGRES_USER: finance
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: Asia/Tokyo
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finance -d finance"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - finance-net
+
+  backend:
+    build:
+      context: ./backend
+    container_name: finance-backend
+    restart: always
+    environment:
+      DATABASE_URL: postgresql+asyncpg://finance:${POSTGRES_PASSWORD}@postgres:5432/finance
+      DEBUG: "False"
+      UPLOAD_DIR: /app/uploads
+      STATEMENT_DIR: /app/uploads/statements
+      RECEIPT_DIR: /app/uploads/receipts
+      TESSERACT_LANG: jpn+eng
+      CORS_ALLOW_ORIGINS: https://${DOMAIN}
+      TRUSTED_HOSTS: ${DOMAIN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - finance-net
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: finance-frontend
+    restart: always
+    environment:
+      NODE_ENV: production
+      NEXT_SERVER_API_ORIGIN: http://backend:8000
+      BACKEND_API_ORIGIN: http://backend:8000
+      NEXT_PUBLIC_API_BASE_URL: ""
+    depends_on:
+      - backend
+    networks:
+      - finance-net
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: finance-caddy
+    restart: always
+    environment:
+      DOMAIN: ${DOMAIN}
+      EMAIL: ${LETSENCRYPT_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - finance-net
+
+volumes:
+  postgres_data:
+  uploads_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  finance-net:
+    driver: bridge
