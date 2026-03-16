@@ -230,4 +230,5 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
         job.processed_at = datetime.utcnow()
         db.add(job)
         db.commit()
-        raise
+        # Job already persisted as failed; caller can return the job payload.
+        return

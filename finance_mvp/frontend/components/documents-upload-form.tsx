@@ -27,7 +27,7 @@ type Props = {
 export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
-  const [sourceType, setSourceType] = useState<ImportSourceType>("financial_document");
+  const [sourceType, setSourceType] = useState<ImportSourceType>("bank_statement");
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 

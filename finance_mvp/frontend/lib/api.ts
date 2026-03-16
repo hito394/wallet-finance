@@ -1,4 +1,10 @@
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1";
+const CLIENT_API_BASE_URL = "/api/v1";
+
+function resolveApiBaseUrl(): string {
+  // Use same-origin proxy for browser requests to avoid CORS failures in local dev.
+  return typeof window === "undefined" ? API_BASE_URL : CLIENT_API_BASE_URL;
+}
 
 export type ApiResult<T> = {
   data: T | null;
@@ -132,7 +138,7 @@ async function parseErrorMessage(response: Response): Promise<string> {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit, options?: RequestOptions): Promise<ApiResult<T>> {
-  const url = `${API_BASE_URL}${path}`;
+  const url = `${resolveApiBaseUrl()}${path}`;
   try {
     const response = await fetch(url, {
       ...init,
@@ -231,7 +237,7 @@ export async function uploadDocument(
   const form = new FormData();
   form.set("file", file);
   const path = `/imports/upload?source_type=${encodeURIComponent(sourceType)}`;
-  const url = `${API_BASE_URL}${path}`;
+  const url = `${resolveApiBaseUrl()}${path}`;
 
   try {
     const response = await fetch(url, {
@@ -254,7 +260,7 @@ export async function uploadDocument(
 }
 
 export async function downloadAccountingCsv(entityId?: string): Promise<ApiResult<Blob>> {
-  const url = `${API_BASE_URL}/exports/accounting.csv`;
+  const url = `${resolveApiBaseUrl()}/exports/accounting.csv`;
   try {
     const response = await fetch(url, {
       cache: "no-store",
@@ -272,7 +278,7 @@ export async function downloadAccountingCsv(entityId?: string): Promise<ApiResul
 }
 
 export async function sendChatMessage(message: string, entityId?: string): Promise<ApiResult<{ reply: string }>> {
-  const url = `${API_BASE_URL}/chat`;
+  const url = `${resolveApiBaseUrl()}/chat`;
   try {
     const response = await fetch(url, {
       method: "POST",
