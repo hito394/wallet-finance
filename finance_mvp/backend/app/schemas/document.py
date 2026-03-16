@@ -37,6 +37,8 @@ class FinancialDocumentRead(BaseModel):
     parsing_status: str = "pending"
     parsing_failure_reason: str | None = None
     raw_text_preview: str | None = None
+    extracted_transaction_count: int = 0
+    extracted_total_amount: Decimal | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

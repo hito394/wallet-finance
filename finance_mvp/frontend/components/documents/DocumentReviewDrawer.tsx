@@ -17,7 +17,7 @@ export default function DocumentReviewDrawer({ doc, onClose }: Props) {
 
   return (
     <tr>
-      <td colSpan={8} style={{ padding: 0 }}>
+      <td colSpan={9} style={{ padding: 0 }}>
         <div
           style={{
             background: "#f8fafc",
@@ -81,6 +81,20 @@ export default function DocumentReviewDrawer({ doc, onClose }: Props) {
               {doc.parsing_failure_reason && (
                 <Field label="Parse Error">
                   <span style={{ color: "#dc2626" }}>{doc.parsing_failure_reason}</span>
+                </Field>
+              )}
+              <Field label="Transactions Created">
+                {doc.extracted_transaction_count > 0 ? (
+                  <span style={{ color: "#15803d", fontWeight: 700 }}>
+                    ✓ {doc.extracted_transaction_count} transaction{doc.extracted_transaction_count !== 1 ? "s" : ""}
+                  </span>
+                ) : (
+                  <span style={{ color: "#94a3b8" }}>None extracted</span>
+                )}
+              </Field>
+              {doc.extracted_total_amount && (
+                <Field label="Extracted Total">
+                  {doc.currency} {parseFloat(doc.extracted_total_amount).toFixed(2)}
                 </Field>
               )}
             </div>

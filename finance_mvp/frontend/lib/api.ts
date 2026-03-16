@@ -79,6 +79,8 @@ export type DocumentItem = {
   parsing_status: string;
   parsing_failure_reason: string | null;
   raw_text_preview: string | null;
+  extracted_transaction_count: number;
+  extracted_total_amount: string | null;
   created_at: string;
 };
 

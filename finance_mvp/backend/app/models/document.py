@@ -81,8 +81,10 @@ class FinancialDocument(Base):
     # Enhanced intelligence fields
     likely_issuer: Mapped[str | None] = mapped_column(String(120), nullable=True)
     source_type_hint: Mapped[str | None] = mapped_column(String(80), nullable=True)  # user-selected type
-    parsing_status: Mapped[str] = mapped_column(String(40), default="pending")  # pending|ok|partial|failed
+    parsing_status: Mapped[str] = mapped_column(String(40), default="pending")  # pending|parsed|needs_review|failed
     parsing_failure_reason: Mapped[str | None] = mapped_column(String(400), nullable=True)
+    extracted_transaction_count: Mapped[int] = mapped_column(default=0)
+    extracted_total_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
 
     match_confidence: Mapped[float | None] = mapped_column(nullable=True)
     match_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)

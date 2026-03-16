@@ -8,10 +8,10 @@ import DocumentsUploadForm from "@/components/documents-upload-form";
 import { fetchDocuments, fetchEntities, fetchReviewQueue, type DocumentItem } from "@/lib/api";
 
 const FILTER_OPTIONS = [
-  { value: "all",    label: "All" },
-  { value: "review", label: "Needs Review" },
-  { value: "ok",     label: "Ready" },
-  { value: "failed", label: "Parse Failed" },
+  { value: "all",         label: "All" },
+  { value: "parsed",      label: "Parsed" },
+  { value: "review",      label: "Needs Review" },
+  { value: "failed",      label: "Parse Failed" },
 ];
 
 export default function DocumentsPage() {
@@ -116,7 +116,12 @@ export default function DocumentsPage() {
         <StatChip label="Total Documents" value={docs.length} />
         <StatChip label="Needs Review" value={needsReviewCount} color={needsReviewCount > 0 ? "#b45309" : undefined} />
         <StatChip label="Queue Items" value={reviewCount} color={reviewCount > 0 ? "#dc2626" : undefined} />
-        <StatChip label="Parse OK" value={docs.filter((d) => d.parsing_status === "ok").length} color="#15803d" />
+        <StatChip label="Parsed OK" value={docs.filter((d) => d.parsing_status === "parsed").length} color="#15803d" />
+        <StatChip
+          label="Transactions Created"
+          value={docs.reduce((sum, d) => sum + (d.extracted_transaction_count || 0), 0)}
+          color="#2563eb"
+        />
       </div>
 
       {/* Upload form */}

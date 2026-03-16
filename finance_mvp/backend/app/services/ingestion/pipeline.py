@@ -86,8 +86,8 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
             reimbursable_candidate=intelligence.reimbursable_candidate,
             tax_relevant_candidate=intelligence.tax_relevant_candidate,
             retention_recommended=intelligence.retention_recommended,
-            review_required=intelligence.review_required,
-            review_reason=intelligence.review_reason,
+            review_required=False,          # set properly after extraction
+            review_reason=None,             # set properly after extraction
             merchant_name=intelligence.merchant_name,
             merchant_address=intelligence.merchant_address,
             purchase_date=intelligence.purchase_date,
@@ -103,12 +103,14 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
             line_items=intelligence.line_items,
             raw_text=intelligence.raw_text,
             extraction_confidence=intelligence.extraction_confidence,
-            # new intelligence fields
+            # intelligence fields — parsing_status stays pending until Phase 2 finishes
             likely_issuer=intelligence.likely_issuer,
             source_type_hint=intelligence.source_type_hint,
-            parsing_status=intelligence.parsing_status,
-            parsing_failure_reason=intelligence.parsing_failure_reason,
+            parsing_status="pending",
+            parsing_failure_reason=None,
             raw_text_preview=intelligence.raw_text_preview,
+            extracted_transaction_count=0,
+            extracted_total_amount=None,
         )
         db.add(document)
         db.flush()
@@ -141,6 +143,7 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
 
             created_count = 0
             duplicate_count = 0
+            extracted_amount_total = 0
             for item in parsed_transactions:
                 merchant_normalized = normalize_merchant(item.merchant_raw)
                 category_result = categorize_transaction(item.merchant_raw, item.description)
@@ -177,13 +180,30 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
                 )
                 db.add(tx)
                 created_count += 1
+                extracted_amount_total += float(item.amount or 0)
 
-            validation = cross_validate_document_with_transactions(db, document)
-            document.match_confidence = validation["match_confidence"]
-            document.match_reason = validation["match_reason"]
-            document.matched_by_amount = validation["matched_by_amount"]
-            document.matched_by_merchant = validation["matched_by_merchant"]
-            document.matched_by_date = validation["matched_by_date"]
+            # Statements generate transactions — they don't match a single receipt.
+            # Set match_confidence=1.0 so review_queue_rules won't flag "unmatched".
+            document.match_confidence = 1.0
+            document.match_reason = f"statement: {created_count} transactions extracted"
+            document.matched_by_amount = created_count > 0
+            document.matched_by_merchant = False
+            document.matched_by_date = created_count > 0
+
+            # Persist extraction outcome
+            document.extracted_transaction_count = created_count
+            document.extracted_total_amount = extracted_amount_total if created_count > 0 else None
+
+            if created_count > 0:
+                document.parsing_status = "parsed"
+                document.parsing_failure_reason = None
+            elif parsed_transactions is not None and len(parsed_transactions) == 0:
+                # Parser ran but found zero rows (empty file / unsupported layout)
+                document.parsing_status = "needs_review"
+                document.parsing_failure_reason = "No transaction rows found in file"
+            else:
+                document.parsing_status = "needs_review"
+                document.parsing_failure_reason = "Parser returned no data"
 
             job.metadata_json = {
                 "created_transactions": created_count,
@@ -221,6 +241,16 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
             document.matched_by_merchant = validation["matched_by_merchant"]
             document.matched_by_date = validation["matched_by_date"]
 
+            # Receipts: no transaction rows to count, but OCR extraction succeeded
+            document.extracted_transaction_count = 0
+            document.extracted_total_amount = None
+            if parsed_receipt.total_amount:
+                document.parsing_status = "parsed"
+                document.parsing_failure_reason = None
+            else:
+                document.parsing_status = "needs_review"
+                document.parsing_failure_reason = "Could not extract total amount from receipt"
+
             job.metadata_json = {
                 "ocr_confidence": parsed_receipt.confidence,
                 "matched_transaction": str(match.transaction_id) if match else None,
@@ -241,12 +271,17 @@ def process_import(db: Session, job: ImportJob, local_file_path: str) -> None:
             )
             document.review_required = True
             document.review_reason = reason_text
+            # If review is needed and parsing was "parsed", downgrade to needs_review
+            if document.parsing_status == "parsed":
+                document.parsing_status = "needs_review"
 
         job.status = ImportStatus.completed
         job.processed_at = datetime.utcnow()
         db.commit()
     except Exception as exc:  # noqa: BLE001
         # Keep the document; only the extraction phase failed.
+        document.parsing_status = "failed"
+        document.parsing_failure_reason = str(exc)[:400]
         job.status = ImportStatus.failed
         job.error_message = str(exc)
         job.processed_at = datetime.utcnow()
