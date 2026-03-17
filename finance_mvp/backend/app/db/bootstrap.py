@@ -3,6 +3,7 @@ from sqlalchemy import select, text
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models.category import Category
+from app.models.plaid_item import BankAccount, PlaidItem  # noqa: F401 – registers tables
 from app.utils.user_context import (
     get_or_create_default_entity,
     get_or_create_default_user,

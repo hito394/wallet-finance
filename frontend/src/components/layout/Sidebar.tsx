@@ -8,12 +8,14 @@ import {
   Receipt,
   Upload,
   Settings,
+  Landmark,
 } from 'lucide-react';
 import clsx from 'clsx';
 
 const NAV_ITEMS = [
   { href: '/',             label: 'ダッシュボード', icon: LayoutDashboard },
   { href: '/transactions', label: '取引',           icon: ArrowLeftRight  },
+  { href: '/accounts',     label: '口座連携',        icon: Landmark        },
   { href: '/receipts',     label: 'レシート',        icon: Receipt         },
   { href: '/imports',      label: 'インポート',      icon: Upload          },
   { href: '/settings',     label: '設定',            icon: Settings        },

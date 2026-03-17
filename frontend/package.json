@@ -17,7 +17,8 @@
     "lucide-react": "^0.323.0",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.1",
-    "swr": "^2.2.4"
+    "swr": "^2.2.4",
+    "react-plaid-link": "^3.5.2"
   },
   "devDependencies": {
     "typescript": "^5",

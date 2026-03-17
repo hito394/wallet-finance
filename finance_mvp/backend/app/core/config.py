@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"], alias="CORS_ORIGINS")
     trusted_hosts: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"], alias="TRUSTED_HOSTS")
 
+    # Plaid (optional – leave empty to disable bank sync feature)
+    plaid_client_id: str = Field(default="", alias="PLAID_CLIENT_ID")
+    plaid_secret: str     = Field(default="", alias="PLAID_SECRET")
+    plaid_env: str        = Field(default="sandbox", alias="PLAID_ENV")  # sandbox | development | production
+
     @field_validator("database_url", mode="before")
     @classmethod
     def _normalize_database_url(cls, value: str) -> str:
