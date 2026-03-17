@@ -13,25 +13,25 @@ class FinancialDocumentRead(BaseModel):
     entity_id: uuid.UUID
     source_name: str
     document_type: FinancialDocumentType
-    document_type_confidence: float
-    classification_explanation: str
-    payment_status: PaymentStatus
-    business_expense_candidate: bool
-    reimbursable_candidate: bool
-    tax_relevant_candidate: bool
-    retention_recommended: bool
-    review_required: bool
-    review_reason: str | None
-    merchant_name: str | None
-    purchase_date: date | None
-    invoice_date: date | None
-    due_date: date | None
-    total_amount: Decimal | None
-    tax_amount: Decimal | None
-    currency: str
-    extraction_confidence: float
-    match_confidence: float | None
-    match_reason: str | None
+    document_type_confidence: float = 0.0
+    classification_explanation: str = ""
+    payment_status: PaymentStatus = PaymentStatus.unknown
+    business_expense_candidate: bool = False
+    reimbursable_candidate: bool = False
+    tax_relevant_candidate: bool = False
+    retention_recommended: bool = False
+    review_required: bool = False
+    review_reason: str | None = None
+    merchant_name: str | None = None
+    purchase_date: date | None = None
+    invoice_date: date | None = None
+    due_date: date | None = None
+    total_amount: Decimal | None = None
+    tax_amount: Decimal | None = None
+    currency: str = "USD"
+    extraction_confidence: float = 0.0
+    match_confidence: float | None = None
+    match_reason: str | None = None
     # enriched intelligence fields
     likely_issuer: str | None = None
     source_type_hint: str | None = None
