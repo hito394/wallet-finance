@@ -244,76 +244,148 @@ def _parse_transaction_line(
     )
 
 
+def _extract_lines_from_page(page) -> list[str]:
+    """Reconstruct text lines from a PDF page using word bounding boxes.
+
+    pdfplumber's extract_text() merges multi-column layouts incorrectly for
+    bank statements.  extract_words() gives each token with its (x, y) position,
+    so we can group tokens that share the same vertical position into a single
+    line – preserving the natural left-to-right column order.
+
+    Falls back to extract_text().splitlines() if extract_words() returns nothing.
+    """
+    try:
+        words = page.extract_words(x_tolerance=3, y_tolerance=3, keep_blank_chars=False)
+    except Exception:
+        words = []
+
+    if not words:
+        # Fallback: plain text extraction
+        text = page.extract_text() or ""
+        return [ln.strip() for ln in text.splitlines() if ln.strip()]
+
+    # Group words by their top-edge coordinate (within a small tolerance so that
+    # words on the same typographic line are merged even if they differ by a pixel).
+    Y_TOLERANCE = 3.0
+    rows: list[tuple[float, list[dict]]] = []  # (representative_y, [word, ...])
+
+    for word in words:
+        top = float(word["top"])
+        matched = False
+        for i, (rep_y, bucket) in enumerate(rows):
+            if abs(rep_y - top) <= Y_TOLERANCE:
+                bucket.append(word)
+                matched = True
+                break
+        if not matched:
+            rows.append((top, [word]))
+
+    # Sort rows top-to-bottom, words left-to-right within each row.
+    rows.sort(key=lambda r: r[0])
+    lines: list[str] = []
+    for _, bucket in rows:
+        bucket.sort(key=lambda w: float(w["x0"]))
+        line = " ".join(w["text"] for w in bucket).strip()
+        if line:
+            lines.append(line)
+
+    # ── Continuation-line merging ────────────────────────────────────────────
+    # Some bank statements put the transaction description on line N and the
+    # amount on line N+1 (no date prefix on N+1).  If line N starts with a date
+    # but has no amount token, AND line N+1 has no date prefix, merge them.
+    merged: list[str] = []
+    i = 0
+    while i < len(lines):
+        current = lines[i]
+        # Does this line start with a date?
+        if DATE_PREFIX_PATTERN.match(current):
+            # Does it already contain an amount token?
+            has_amount = bool(AMOUNT_TOKEN_PATTERN.search(current))
+            if not has_amount and i + 1 < len(lines):
+                next_line = lines[i + 1]
+                # Only merge if the next line does NOT start with a date
+                if not DATE_PREFIX_PATTERN.match(next_line):
+                    merged.append(current + " " + next_line)
+                    i += 2
+                    continue
+        merged.append(current)
+        i += 1
+
+    return merged
+
+
 def parse_pdf_statement_with_diagnostics(
     file_path: str,
     source: str,
 ) -> tuple[list[ParsedTransaction], StatementParseDiagnostics]:
     try:
         with __import__("pdfplumber").open(file_path) as pdf:
-            pages_text = [(page.extract_text() or "") for page in pdf.pages]
+            pages = list(pdf.pages)
+            # Plain text only for issuer detection (cheap single-pass).
+            issuer_text = " ".join((p.extract_text() or "") for p in pages)
+            issuer = _detect_issuer(issuer_text)
+            diagnostics = StatementParseDiagnostics(issuer=issuer)
+            scored_rows: list[tuple[int, ParsedTransaction]] = []
+
+            for page_index, page in enumerate(pages):
+                lines = _extract_lines_from_page(page)
+                if not lines:
+                    continue
+
+                if issuer == "fnbo" and page_index == 0 and _is_summary_heavy_page(lines):
+                    diagnostics.skipped_summary_pages += 1
+                    diagnostics.summary_section_hits += 1
+                    continue
+
+                in_detail_section = False
+                in_summary_section = False
+                section_direction: str | None = None  # "debit" | "credit" | None
+
+                for raw_line in lines:
+                    if _has_section_title(raw_line, DETAIL_SECTION_TITLES):
+                        diagnostics.detail_section_hits += 1
+                        in_detail_section = True
+                        in_summary_section = False
+                        if _has_section_title(raw_line, CREDIT_SECTION_TITLES):
+                            section_direction = "credit"
+                        elif _has_section_title(raw_line, DEBIT_SECTION_TITLES):
+                            section_direction = "debit"
+                        else:
+                            section_direction = None
+                        continue
+                    if _has_section_title(raw_line, SUMMARY_SECTION_TITLES):
+                        diagnostics.summary_section_hits += 1
+                        in_summary_section = True
+                        in_detail_section = False
+                        section_direction = None
+                        continue
+
+                    if ACCOUNT_NUMBER_PATTERN.search(raw_line):
+                        diagnostics.suspicious_account_number_rows += 1
+
+                    tx = _parse_transaction_line(
+                        raw_line,
+                        source=source,
+                        diagnostics=diagnostics,
+                        section_direction=section_direction,
+                    )
+                    if tx is None:
+                        continue
+
+                    score = 1
+                    if in_detail_section:
+                        score += 2
+                    if in_summary_section:
+                        score -= 2
+                    if issuer == "chase" and tx.posted_date is not None:
+                        score += 1
+
+                    if score >= 1:
+                        diagnostics.matched_rows += 1
+                        scored_rows.append((score, tx))
+
     except Exception:
         return [], StatementParseDiagnostics(issuer="unknown")
-
-    issuer = _detect_issuer("\n".join(pages_text))
-    diagnostics = StatementParseDiagnostics(issuer=issuer)
-    scored_rows: list[tuple[int, ParsedTransaction]] = []
-
-    for page_index, page_text in enumerate(pages_text):
-        lines = [line.strip() for line in page_text.splitlines() if line.strip()]
-        if not lines:
-            continue
-
-        if issuer == "fnbo" and page_index == 0 and _is_summary_heavy_page(lines):
-            diagnostics.skipped_summary_pages += 1
-            diagnostics.summary_section_hits += 1
-            continue
-
-        in_detail_section = False
-        in_summary_section = False
-        section_direction: str | None = None  # "debit" | "credit" | None
-
-        for raw_line in lines:
-            if _has_section_title(raw_line, DETAIL_SECTION_TITLES):
-                diagnostics.detail_section_hits += 1
-                in_detail_section = True
-                in_summary_section = False
-                if _has_section_title(raw_line, CREDIT_SECTION_TITLES):
-                    section_direction = "credit"
-                elif _has_section_title(raw_line, DEBIT_SECTION_TITLES):
-                    section_direction = "debit"
-                else:
-                    section_direction = None
-                continue
-            if _has_section_title(raw_line, SUMMARY_SECTION_TITLES):
-                diagnostics.summary_section_hits += 1
-                in_summary_section = True
-                in_detail_section = False
-                section_direction = None
-                continue
-
-            if ACCOUNT_NUMBER_PATTERN.search(raw_line):
-                diagnostics.suspicious_account_number_rows += 1
-
-            tx = _parse_transaction_line(
-                raw_line,
-                source=source,
-                diagnostics=diagnostics,
-                section_direction=section_direction,
-            )
-            if tx is None:
-                continue
-
-            score = 1
-            if in_detail_section:
-                score += 2
-            if in_summary_section:
-                score -= 2
-            if issuer == "chase" and tx.posted_date is not None:
-                score += 1
-
-            if score >= 1:
-                diagnostics.matched_rows += 1
-                scored_rows.append((score, tx))
 
     parsed: list[ParsedTransaction] = []
     seen: set[tuple[str, str, str, str]] = set()
