@@ -1,54 +1,187 @@
+import { Suspense } from "react";
 import Link from "next/link";
+import EntitySwitcher from "@/components/entity-switcher";
+import MonthSelector from "@/components/MonthSelector";
+import SummaryCards from "@/components/dashboard/SummaryCards";
+import SpendingPieChart from "@/components/charts/SpendingPieChart";
+import MonthlyTrendChart from "@/components/charts/MonthlyTrendChart";
+import RecentTransactionsList from "@/components/dashboard/RecentTransactionsList";
+import StatusMessage from "@/components/status-message";
+import {
+  fetchDocuments,
+  fetchEntities,
+  fetchMonthlyHistory,
+  fetchMonthlyOverview,
+  fetchReviewQueue,
+  fetchTransactions,
+} from "@/lib/api";
 
-export default function HomePage() {
+type Props = {
+  searchParams?: Promise<{ entityId?: string; year?: string; month?: string }>;
+};
+
+export default async function HomePage({ searchParams }: Props) {
+  const params = (await searchParams) || {};
+
+  const now = new Date();
+  const year = params.year ? Number(params.year) : now.getFullYear();
+  const month = params.month ? Number(params.month) : now.getMonth() + 1;
+
+  const entitiesResult = await fetchEntities();
+  const entities = entitiesResult.data || [];
+  const selectedEntityId = params.entityId || entities[0]?.id;
+
+  const [overviewResult, transactionsResult, documentsResult, reviewResult, historyResult] =
+    selectedEntityId
+      ? await Promise.all([
+          fetchMonthlyOverview(selectedEntityId, year, month),
+          fetchTransactions(selectedEntityId, year, month),
+          fetchDocuments(selectedEntityId),
+          fetchReviewQueue(selectedEntityId),
+          fetchMonthlyHistory(selectedEntityId, 12),
+        ])
+      : [
+          { data: null, error: null, status: null },
+          { data: [], error: null, status: null },
+          { data: [], error: null, status: null },
+          { data: [], error: null, status: null },
+          { data: [], error: null, status: null },
+        ];
+
+  const overview = overviewResult.data;
+  const transactions = transactionsResult.data || [];
+  const documents = documentsResult.data || [];
+  const reviewQueue = reviewResult.data || [];
+  const history = historyResult.data || [];
+  const docsRequiringReview = documents.filter((doc) => doc.review_required).length;
+
+  const selectedMonthStr = `${year}-${String(month).padStart(2, "0")}`;
+
+  const monthDisplayName = new Date(year, month - 1, 1).toLocaleString("en", {
+    month: "long",
+    year: "numeric",
+  });
+
   return (
-    <div className="home-grid">
-      <section className="panel hero-card">
-        <span className="eyebrow">Automation-first finance workspace</span>
-        <h1>Manage cashflow, documents, and insights in one product.</h1>
-        <p>
-          AI Finance Assistant turns uploads and transaction data into actionable dashboards, review queues, and
-          export-ready reports.
-        </p>
-        <div className="hero-actions">
-          <Link href="/dashboard" className="btn primary">
-            Get Started
-          </Link>
-          <Link href="/settings" className="btn secondary">
-            Log In
-          </Link>
-        </div>
-      </section>
+    <div style={{ display: "grid", gap: 20 }}>
 
-      <section className="panel feature-card">
-        <h2>Product sections</h2>
-        <div className="feature-grid">
-          <Link href="/dashboard" className="feature-link">
-            <strong>Dashboard</strong>
-            <p>KPIs, alerts, and overview trends.</p>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 12,
+        }}
+      >
+        <div>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#10212f" }}>
+            Finance Overview
+          </h1>
+          <p style={{ margin: "4px 0 0", color: "#5f7284", fontSize: 14 }}>
+            {monthDisplayName} — cashflow, trends &amp; spending breakdown
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <Link
+            href={`/documents${selectedEntityId ? `?entityId=${selectedEntityId}` : ""}`}
+            className="btn secondary"
+            style={{ fontSize: 13, padding: "7px 14px" }}
+          >
+            Upload Doc
           </Link>
-          <Link href="/transactions" className="feature-link">
-            <strong>Transactions</strong>
-            <p>Search and inspect ledger activity.</p>
-          </Link>
-          <Link href="/documents" className="feature-link">
-            <strong>Documents</strong>
-            <p>Upload and track statement/receipt intelligence.</p>
-          </Link>
-          <Link href="/reports" className="feature-link">
-            <strong>Reports</strong>
-            <p>Monthly summaries and CSV exports.</p>
-          </Link>
-          <Link href="/chatbot" className="feature-link">
-            <strong>Chatbot</strong>
-            <p>AI assistant workflow for finance Q&A.</p>
-          </Link>
-          <Link href="/review" className="feature-link">
-            <strong>Review Queue</strong>
-            <p>Resolve low-confidence or conflicting items.</p>
+          <Link
+            href={`/transactions${selectedEntityId ? `?entityId=${selectedEntityId}` : ""}`}
+            className="btn secondary"
+            style={{ fontSize: 13, padding: "7px 14px" }}
+          >
+            Transactions
           </Link>
         </div>
-      </section>
+      </div>
+
+      {entitiesResult.error && (
+        <StatusMessage tone="error" title="Unable to load entities" detail={entitiesResult.error} />
+      )}
+      {!selectedEntityId && (
+        <StatusMessage
+          tone="warn"
+          title="No entity found"
+          detail="Create or assign an entity from Settings, then refresh."
+        />
+      )}
+
+      {/* Entity switcher */}
+      {entities.length > 0 && (
+        <Suspense fallback={null}>
+          <EntitySwitcher entities={entities} selectedId={selectedEntityId || ""} />
+        </Suspense>
+      )}
+
+      {/* Month selector */}
+      <div className="panel" style={{ padding: "14px 20px" }}>
+        <p
+          style={{
+            margin: "0 0 10px",
+            fontSize: 11,
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.6px",
+            color: "#5f7284",
+          }}
+        >
+          Select Month
+        </p>
+        <Suspense fallback={null}>
+          <MonthSelector
+            selectedYear={year}
+            selectedMonth={month}
+            entityId={selectedEntityId}
+          />
+        </Suspense>
+      </div>
+
+      {/* KPI cards */}
+      <SummaryCards
+        overview={overview}
+        docsRequiringReview={docsRequiringReview}
+        openReviewQueue={reviewQueue.filter((item) => item.status === "pending").length}
+      />
+
+      {/* Trend chart — full width */}
+      <MonthlyTrendChart data={history} selectedMonth={selectedMonthStr} />
+
+      {/* Category breakdown — full width */}
+      <SpendingPieChart data={overview?.category_breakdown ?? []} />
+
+      {/* Alerts */}
+      {(overview?.alerts.length ?? 0) > 0 && (
+        <div className="panel" style={{ padding: "14px 20px" }}>
+          <h3 style={{ margin: "0 0 10px", fontSize: 15 }}>⚠️ Alerts</h3>
+          <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
+            {(overview?.alerts ?? []).map((alert) => (
+              <li key={alert} style={{ color: "#92400e", fontSize: 14 }}>
+                {alert}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Recent transactions for selected month */}
+      <RecentTransactionsList rows={transactions} entityId={selectedEntityId} />
+
+      {overviewResult.error && (
+        <StatusMessage tone="error" title="Overview unavailable" detail={overviewResult.error} />
+      )}
+      {transactionsResult.error && (
+        <StatusMessage
+          tone="error"
+          title="Transactions unavailable"
+          detail={transactionsResult.error}
+        />
+      )}
     </div>
   );
 }
