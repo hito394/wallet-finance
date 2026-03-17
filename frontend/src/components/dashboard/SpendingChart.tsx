@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import type { MonthlyTrend } from '@/types';
@@ -16,6 +16,27 @@ const MONTH_LABELS: Record<string, string> = {
   '09': '9月', '10': '10月', '11': '11月', '12': '12月',
 };
 
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div
+      className="rounded-xl px-4 py-3 text-sm"
+      style={{
+        backgroundColor: '#1A1C2E',
+        border: '1px solid #2A2D42',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+      }}
+    >
+      <p className="font-semibold mb-2" style={{ color: '#CBD5E1' }}>{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.dataKey} className="tabular-nums" style={{ color: p.color }}>
+          {p.name}：¥{Number(p.value).toLocaleString()}
+        </p>
+      ))}
+    </div>
+  );
+};
+
 export function SpendingChart({ data }: Props) {
   const chartData = data.map((d) => {
     const [, month] = d.month.split('-');
@@ -27,29 +48,63 @@ export function SpendingChart({ data }: Props) {
   });
 
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <BarChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-        <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+    <ResponsiveContainer width="100%" height={230}>
+      <AreaChart data={chartData} margin={{ top: 8, right: 4, left: 4, bottom: 0 }}>
+        <defs>
+          <linearGradient id="gradExpense" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#F87171" stopOpacity={0.3} />
+            <stop offset="100%" stopColor="#F87171" stopOpacity={0}   />
+          </linearGradient>
+          <linearGradient id="gradIncome" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#4ADE80" stopOpacity={0.25} />
+            <stop offset="100%" stopColor="#4ADE80" stopOpacity={0}    />
+          </linearGradient>
+        </defs>
+
+        <CartesianGrid
+          strokeDasharray="3 3"
+          stroke="#1E2030"
+          vertical={false}
+        />
+        <XAxis
+          dataKey="name"
+          tick={{ fontSize: 11, fill: '#475569' }}
+          axisLine={false}
+          tickLine={false}
+        />
         <YAxis
-          tick={{ fontSize: 12, fill: '#9ca3af' }}
+          tick={{ fontSize: 11, fill: '#475569' }}
           axisLine={false}
           tickLine={false}
           tickFormatter={(v: number) =>
             v >= 10000 ? `${(v / 10000).toFixed(0)}万` : `${v.toLocaleString()}`
           }
         />
-        <Tooltip
-          formatter={(value: number, name: string) => [
-            `¥${value.toLocaleString()}`,
-            name,
-          ]}
-          contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
+        <Tooltip content={<CustomTooltip />} />
+        <Legend
+          iconType="circle"
+          iconSize={7}
+          wrapperStyle={{ fontSize: 12, color: '#64748B', paddingTop: 8 }}
         />
-        <Legend iconType="circle" iconSize={8} />
-        <Bar dataKey="支出" fill="#FF6B6B" radius={[6, 6, 0, 0]} maxBarSize={32} />
-        <Bar dataKey="収入" fill="#4ECDC4" radius={[6, 6, 0, 0]} maxBarSize={32} />
-      </BarChart>
+        <Area
+          type="monotone"
+          dataKey="支出"
+          stroke="#F87171"
+          strokeWidth={2}
+          fill="url(#gradExpense)"
+          dot={false}
+          activeDot={{ r: 4, fill: '#F87171', strokeWidth: 0 }}
+        />
+        <Area
+          type="monotone"
+          dataKey="収入"
+          stroke="#4ADE80"
+          strokeWidth={2}
+          fill="url(#gradIncome)"
+          dot={false}
+          activeDot={{ r: 4, fill: '#4ADE80', strokeWidth: 0 }}
+        />
+      </AreaChart>
     </ResponsiveContainer>
   );
 }

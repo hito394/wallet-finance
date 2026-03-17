@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: '家計簿アプリ',
   description: '銀行明細・レシートから自動で家計を管理',
   manifest: '/manifest.webmanifest',
-  themeColor: '#f8f9fc',
+  themeColor: '#0B0C14',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -25,7 +25,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja">
-      <body className="bg-surface">
+      <body style={{ backgroundColor: '#0B0C14' }}>
         <div className="min-h-screen md:flex">
           <Sidebar />
           <main className="flex-1 min-w-0 pb-20 md:pb-0">{children}</main>
