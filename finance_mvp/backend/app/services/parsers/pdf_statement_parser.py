@@ -7,8 +7,8 @@ from dateutil import parser as date_parser
 from app.services.parsers.types import ParsedTransaction
 
 
-# Supports common formats: MM/DD/YYYY, YYYY/MM/DD, YYYY-MM-DD, M/D/YY, etc.
-DATE_PATTERN = r"\d{4}[/\-]\d{1,2}[/\-]\d{1,2}|\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}"
+# Supports common formats: MM/DD/YYYY, YYYY/MM/DD, YYYY-MM-DD, M/D/YY, MM/DD, M/D, etc.
+DATE_PATTERN = r"\d{4}[/\-]\d{1,2}[/\-]\d{1,2}|\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}|\d{1,2}[/\-]\d{1,2}"
 DATE_PREFIX_PATTERN = re.compile(
     rf"^(?P<date>{DATE_PATTERN})(?:\s+(?P<posted>{DATE_PATTERN}))?\s+(?P<rest>.+)$"
 )
@@ -22,6 +22,13 @@ DETAIL_SECTION_TITLES = {
     "DEPOSITS AND ADDITIONS",
     "ELECTRONIC WITHDRAWALS",
     "CHECKS PAID",
+    "ATM & DEBIT CARD WITHDRAWALS",
+    "ATM AND DEBIT CARD WITHDRAWALS",
+    "ATM AND DEBIT CARD ACTIVITY",
+    "OTHER WITHDRAWALS, FEES & CHARGES",
+    "OTHER WITHDRAWALS",
+    "PURCHASE TRANSACTIONS",
+    "DAILY TRANSACTIONS",
 }
 SUMMARY_SECTION_TITLES = {
     "MINIMUM PAYMENT DUE",
