@@ -30,6 +30,22 @@ DETAIL_SECTION_TITLES = {
     "PURCHASE TRANSACTIONS",
     "DAILY TRANSACTIONS",
 }
+# Sections where every transaction is incoming (credit/income)
+CREDIT_SECTION_TITLES = {
+    "PAYMENTS AND OTHER CREDITS",
+    "DEPOSITS AND ADDITIONS",
+}
+# Sections where every transaction is outgoing (debit/expense)
+DEBIT_SECTION_TITLES = {
+    "ELECTRONIC WITHDRAWALS",
+    "CHECKS PAID",
+    "ATM & DEBIT CARD WITHDRAWALS",
+    "ATM AND DEBIT CARD WITHDRAWALS",
+    "ATM AND DEBIT CARD ACTIVITY",
+    "OTHER WITHDRAWALS, FEES & CHARGES",
+    "OTHER WITHDRAWALS",
+    "PURCHASE TRANSACTIONS",
+}
 SUMMARY_SECTION_TITLES = {
     "MINIMUM PAYMENT DUE",
     "NEW BALANCE",
@@ -104,7 +120,13 @@ def _is_summary_heavy_page(lines: list[str]) -> bool:
     return summary_hits >= 2 and detail_hits == 0
 
 
-def _parse_amount_token(token: str) -> tuple[Decimal, str] | None:
+def _parse_amount_token(token: str) -> tuple[Decimal, str, bool] | None:
+    """Returns (abs_amount, direction, is_negative).
+
+    direction uses credit-card convention (negative/CR → credit) as a raw default.
+    Callers responsible for bank-statement should override direction using
+    section context or flip is_negative → debit.
+    """
     cleaned = token.strip().upper().replace("$", "")
     has_cr_marker = cleaned.endswith("CR")
     if has_cr_marker:
@@ -125,7 +147,7 @@ def _parse_amount_token(token: str) -> tuple[Decimal, str] | None:
         return None
 
     direction = "credit" if has_cr_marker or is_negative else "debit"
-    return abs(amount), direction
+    return abs(amount), direction, is_negative
 
 
 def _pick_amount_match(matches: list[re.Match[str]], source: str) -> re.Match[str]:
@@ -152,6 +174,7 @@ def _parse_transaction_line(
     *,
     source: str,
     diagnostics: StatementParseDiagnostics,
+    section_direction: str | None = None,
 ) -> ParsedTransaction | None:
     match = DATE_PREFIX_PATTERN.match(line)
     if not match:
@@ -178,7 +201,7 @@ def _parse_transaction_line(
     if not parsed_amount:
         return None
 
-    amount, direction = parsed_amount
+    amount, raw_direction, is_negative = parsed_amount
     running_balance = None
     if len(amount_matches) >= 2 and source in {"bank", "card"}:
         balance_candidate = amount_matches[-1]
@@ -186,6 +209,19 @@ def _parse_transaction_line(
             parsed_balance = _parse_amount_token(balance_candidate.group(0))
             if parsed_balance:
                 running_balance = parsed_balance[0]
+
+    # Determine transaction direction:
+    # 1. If we know the section type (deposits vs withdrawals), trust that first.
+    # 2. For bank statements with signed amounts: negative = outgoing (debit/expense),
+    #    positive = incoming (credit/income).  This is the opposite of the raw credit-card
+    #    convention used inside _parse_amount_token.
+    # 3. For credit cards: keep raw convention (negative/CR → credit, positive → debit).
+    if section_direction is not None:
+        direction = section_direction
+    elif source == "bank":
+        direction = "debit" if is_negative else "credit"
+    else:
+        direction = raw_direction
 
     description = re.sub(r"\s+", " ", rest[: amount_match.start()].strip(" -\t"))
     if len(description) < 3:
@@ -234,23 +270,36 @@ def parse_pdf_statement_with_diagnostics(
 
         in_detail_section = False
         in_summary_section = False
+        section_direction: str | None = None  # "debit" | "credit" | None
 
         for raw_line in lines:
             if _has_section_title(raw_line, DETAIL_SECTION_TITLES):
                 diagnostics.detail_section_hits += 1
                 in_detail_section = True
                 in_summary_section = False
+                if _has_section_title(raw_line, CREDIT_SECTION_TITLES):
+                    section_direction = "credit"
+                elif _has_section_title(raw_line, DEBIT_SECTION_TITLES):
+                    section_direction = "debit"
+                else:
+                    section_direction = None
                 continue
             if _has_section_title(raw_line, SUMMARY_SECTION_TITLES):
                 diagnostics.summary_section_hits += 1
                 in_summary_section = True
                 in_detail_section = False
+                section_direction = None
                 continue
 
             if ACCOUNT_NUMBER_PATTERN.search(raw_line):
                 diagnostics.suspicious_account_number_rows += 1
 
-            tx = _parse_transaction_line(raw_line, source=source, diagnostics=diagnostics)
+            tx = _parse_transaction_line(
+                raw_line,
+                source=source,
+                diagnostics=diagnostics,
+                section_direction=section_direction,
+            )
             if tx is None:
                 continue
 
