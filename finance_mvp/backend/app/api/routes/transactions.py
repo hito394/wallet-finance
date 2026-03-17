@@ -39,8 +39,18 @@ def update_transaction(
     x_entity_id: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> TransactionRead:
+    import uuid as _uuid
     user, entity = resolve_actor_context(db, x_user_id, x_entity_id)
-    transaction = db.scalar(select(Transaction).where(Transaction.id == transaction_id))
+    try:
+        tx_uuid = _uuid.UUID(transaction_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid transaction_id")
+    transaction = db.scalar(
+        select(Transaction).where(
+            Transaction.id == tx_uuid,
+            Transaction.entity_id == entity.id,
+        )
+    )
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
 

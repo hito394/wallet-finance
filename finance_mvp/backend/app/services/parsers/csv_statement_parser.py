@@ -33,12 +33,18 @@ def _to_decimal(value) -> Decimal | None:
     negative = text.startswith("(") and text.endswith(")")
     if negative:
         text = text[1:-1].strip()
-    amount = Decimal(text)
+    try:
+        amount = Decimal(text)
+    except Exception:
+        return None
     return -abs(amount) if negative else amount
 
 
 def parse_csv_statement(file_path: str, source: str) -> list[ParsedTransaction]:
-    df = pd.read_csv(file_path)
+    try:
+        df = pd.read_csv(file_path)
+    except Exception:
+        return []
     columns = list(df.columns)
 
     date_col = _pick_column(columns, DATE_CANDIDATES)
@@ -83,9 +89,14 @@ def parse_csv_statement(file_path: str, source: str) -> list[ParsedTransaction]:
             running_balance_raw = _to_decimal(row[balance_col])
             running_balance = running_balance_raw.quantize(Decimal("0.01")) if running_balance_raw is not None else None
 
+        try:
+            transaction_date = date_parser.parse(str(row[date_col])).date()
+        except Exception:
+            continue
+
         results.append(
             ParsedTransaction(
-                transaction_date=date_parser.parse(str(row[date_col])).date(),
+                transaction_date=transaction_date,
                 posted_date=None,
                 merchant_raw=str(row[desc_col]).strip(),
                 description=str(row[desc_col]).strip(),

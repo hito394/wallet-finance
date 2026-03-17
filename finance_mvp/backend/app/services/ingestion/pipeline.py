@@ -214,14 +214,6 @@ def process_import(
     # commit the document so it appears in the UI; only the job is marked failed.
     try:
         if job.source_type in {ImportSourceType.bank_statement, ImportSourceType.credit_card_statement}:
-            if force_reprocess:
-                db.execute(
-                    delete(Transaction).where(
-                        Transaction.entity_id == job.entity_id,
-                        Transaction.import_id == job.id,
-                    )
-                )
-
             parser_confidence = 0.9
             summary_without_detail = False
             suspicious_account_number_rows = 0
@@ -246,6 +238,16 @@ def process_import(
                 parser_name = "unknown"
                 parsed_transactions = []
                 parser_confidence = 0.0
+
+            # Delete old transactions only after parsing succeeds, so a parse
+            # failure never leaves the import with zero transactions.
+            if force_reprocess:
+                db.execute(
+                    delete(Transaction).where(
+                        Transaction.entity_id == job.entity_id,
+                        Transaction.import_id == job.id,
+                    )
+                )
 
             created_count = 0
             duplicate_count = 0

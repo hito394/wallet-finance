@@ -17,13 +17,19 @@ DATE_PATTERN = re.compile(r"(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})")
 def extract_text(file_path: str) -> str:
     if file_path.lower().endswith(".pdf"):
         pages = []
-        with pdfplumber.open(file_path) as pdf:
-            for page in pdf.pages:
-                pages.append(page.extract_text() or "")
+        try:
+            with pdfplumber.open(file_path) as pdf:
+                for page in pdf.pages:
+                    pages.append(page.extract_text() or "")
+        except Exception:
+            return ""
         return "\n".join(pages)
 
-    image = Image.open(file_path)
-    return pytesseract.image_to_string(image)
+    try:
+        image = Image.open(file_path)
+        return pytesseract.image_to_string(image)
+    except Exception:
+        return ""
 
 
 def parse_receipt(file_path: str) -> ParsedReceipt:
