@@ -33,4 +33,4 @@ def categorize_transaction(merchant_raw: str, description: str) -> Categorizatio
         if any(keyword in text for keyword in keywords):
             return CategorizationResult(category=category, confidence=0.92, strategy="keyword_rule")
 
-    return CategorizationResult(category="Shopping", confidence=0.55, strategy="fallback_baseline")
+    return CategorizationResult(category="Uncategorized", confidence=0.0, strategy="fallback_baseline")

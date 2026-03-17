@@ -205,8 +205,11 @@ def parse_pdf_statement_with_diagnostics(
     file_path: str,
     source: str,
 ) -> tuple[list[ParsedTransaction], StatementParseDiagnostics]:
-    with __import__("pdfplumber").open(file_path) as pdf:
-        pages_text = [(page.extract_text() or "") for page in pdf.pages]
+    try:
+        with __import__("pdfplumber").open(file_path) as pdf:
+            pages_text = [(page.extract_text() or "") for page in pdf.pages]
+    except Exception:
+        return [], StatementParseDiagnostics(issuer="unknown")
 
     issuer = _detect_issuer("\n".join(pages_text))
     diagnostics = StatementParseDiagnostics(issuer=issuer)
