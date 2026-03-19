@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.db.session import get_db
+from app.models.document import FinancialDocument
 from app.models.import_job import ImportJob, ImportSourceType, ImportStatus
 from app.schemas.import_job import ImportJobRead
 from app.services.ingestion.pipeline import process_import
@@ -232,6 +233,20 @@ def upload_import(
         )
         .order_by(ImportJob.created_at.desc())
     )
+
+    if existing and existing.status in {ImportStatus.pending, ImportStatus.processing, ImportStatus.completed}:
+        existing_document = db.scalar(
+            select(FinancialDocument)
+            .where(
+                FinancialDocument.entity_id == entity.id,
+                FinancialDocument.import_id == existing.id,
+            )
+            .order_by(FinancialDocument.created_at.desc())
+        )
+        # Reuse should not lock users into a failed parse result.
+        if existing_document and existing_document.parsing_status == "failed":
+            existing = None
+
     if existing and existing.status in {ImportStatus.pending, ImportStatus.processing, ImportStatus.completed}:
         # Best-effort cleanup: this request uploaded a duplicate payload, so we
         # can discard the newly written temporary file.
