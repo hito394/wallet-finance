@@ -381,6 +381,7 @@ def process_import(
                 )
 
             job.metadata_json = {
+                **(job.metadata_json or {}),
                 "created_transactions": created_count,
                 "duplicate_transactions": duplicate_count,
                 "same_import_existing_transactions": same_import_existing_count,
@@ -432,6 +433,7 @@ def process_import(
                 document.parsing_failure_reason = "Could not extract total amount from receipt"
 
             job.metadata_json = {
+                **(job.metadata_json or {}),
                 "ocr_confidence": parsed_receipt.confidence,
                 "matched_transaction": str(match.transaction_id) if match else None,
                 "document_type": document.document_type.value,
