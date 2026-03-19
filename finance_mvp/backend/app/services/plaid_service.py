@@ -33,15 +33,16 @@ from plaid.model.products import Products
 from plaid.model.transactions_sync_request import TransactionsSyncRequest
 from sqlalchemy.orm import Session
 
+from sqlalchemy import select
+
 from app.core.config import settings
+from app.models.category import Category
 from app.models.plaid_item import BankAccount, PlaidItem
 from app.models.transaction import Transaction, TransactionDirection, TransactionSource
-from app.services.ingestion.categorization import categorize_transaction
-from app.services.ingestion.deduplication import (
-    find_duplicate_by_fingerprint,
-    transaction_fingerprint,
-)
-from app.services.ingestion.normalization import normalize_merchant
+from app.services.categorization.engine import categorize_transaction
+from app.services.dedupe.duplicate_detector import find_duplicate_by_fingerprint
+from app.services.normalization.merchant_normalizer import normalize_merchant
+from app.utils.fingerprint import transaction_fingerprint
 
 log = logging.getLogger(__name__)
 
@@ -254,11 +255,15 @@ def _upsert_plaid_transaction(db: Session, tx_data: dict, item: PlaidItem, entit
     description = tx_data.get("original_description") or merchant_raw
 
     merchant_norm = normalize_merchant(merchant_raw)
-    category = categorize_transaction(
-        merchant=merchant_norm,
+    cat_result = categorize_transaction(
+        merchant_raw=merchant_norm,
         description=description,
-        direction=direction.value,
     )
+    cat_slug = cat_result.category.lower().replace(" ", "-")
+    db_category = db.scalar(select(Category).where(
+        Category.entity_id == entity_id,
+        Category.slug == cat_slug,
+    ))
 
     fingerprint = transaction_fingerprint(
         transaction_date=date,
@@ -296,7 +301,7 @@ def _upsert_plaid_transaction(db: Session, tx_data: dict, item: PlaidItem, entit
         direction        = direction,
         currency         = tx_data.get("iso_currency_code") or "USD",
         source           = TransactionSource.bank,
-        category         = category,
+        category_id      = db_category.id if db_category else None,
         fingerprint      = fingerprint,
     )
     db.add(tx)

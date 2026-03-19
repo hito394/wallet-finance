@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -5,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.review_queue import ReviewQueueItem
+from app.models.review_queue import ReviewQueueItem, ReviewStatus
 from app.schemas.review import ReviewQueueItemRead, ReviewResolveRequest
 from app.utils.user_context import resolve_actor_context
 
@@ -22,7 +23,7 @@ def list_review_queue(
     _, entity = resolve_actor_context(db, x_user_id, x_entity_id)
     query = select(ReviewQueueItem).where(ReviewQueueItem.entity_id == entity.id)
     if not include_resolved:
-        query = query.where(ReviewQueueItem.status == "pending")
+        query = query.where(ReviewQueueItem.status == ReviewStatus.pending)
     return list(
         db.scalars(
             query.order_by(ReviewQueueItem.created_at.desc())
@@ -39,9 +40,13 @@ def resolve_review_item(
     db: Session = Depends(get_db),
 ) -> ReviewQueueItemRead:
     _, entity = resolve_actor_context(db, x_user_id, x_entity_id)
+    try:
+        review_uuid = uuid.UUID(review_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid review_id")
     item = db.scalar(
         select(ReviewQueueItem).where(
-            ReviewQueueItem.id == review_id,
+            ReviewQueueItem.id == review_uuid,
             ReviewQueueItem.entity_id == entity.id,
         )
     )
@@ -49,7 +54,7 @@ def resolve_review_item(
         raise HTTPException(status_code=404, detail="Review item not found")
 
     item.status = payload.status
-    item.resolved_at = datetime.utcnow() if payload.status != "pending" else None
+    item.resolved_at = datetime.utcnow() if payload.status != ReviewStatus.pending else None
     db.add(item)
     db.commit()
     db.refresh(item)

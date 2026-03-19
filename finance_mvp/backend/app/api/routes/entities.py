@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -47,4 +49,8 @@ def create_entity(
 
 @router.get("/{entity_id}/members", response_model=list[EntityMemberRead])
 def list_entity_members(entity_id: str, db: Session = Depends(get_db)) -> list[EntityMemberRead]:
-    return list(db.scalars(select(EntityMember).where(EntityMember.entity_id == entity_id)).all())
+    try:
+        entity_uuid = uuid.UUID(entity_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid entity_id")
+    return list(db.scalars(select(EntityMember).where(EntityMember.entity_id == entity_uuid)).all())
