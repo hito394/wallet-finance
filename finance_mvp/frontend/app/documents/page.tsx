@@ -11,6 +11,7 @@ import {
   fetchDocuments,
   fetchEntities,
   fetchReviewQueue,
+  reclassifyTransactions,
   retryDocumentParse,
   type DocumentItem,
   type ImportSourceType,
@@ -39,6 +40,7 @@ export default function DocumentsPage() {
   const [updatingTypeDocumentId, setUpdatingTypeDocumentId] = useState<string | null>(null);
   const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isReclassifying, setIsReclassifying] = useState(false);
 
   const load = async (eid?: string) => {
     setLoading(true);
@@ -116,6 +118,18 @@ export default function DocumentsPage() {
     setIsBulkDeleting(false);
     if (result.error) {
       setError(result.error || "Failed to bulk delete uploaded documents");
+      return;
+    }
+    await load(entityId);
+  };
+
+  const handleReclassify = async () => {
+    setIsReclassifying(true);
+    setError(null);
+    const result = await reclassifyTransactions(entityId);
+    setIsReclassifying(false);
+    if (result.error) {
+      setError(result.error || "Failed to reclassify transactions");
       return;
     }
     await load(entityId);
@@ -263,6 +277,15 @@ export default function DocumentsPage() {
           className="input"
           style={{ maxWidth: 260, marginLeft: "auto" }}
         />
+        <button
+          type="button"
+          className="btn secondary"
+          onClick={handleReclassify}
+          disabled={isReclassifying}
+          style={{ whiteSpace: "nowrap" }}
+        >
+          {isReclassifying ? "Reclassifying..." : "Reclassify Existing Transactions"}
+        </button>
       </div>
 
       {/* Error */}

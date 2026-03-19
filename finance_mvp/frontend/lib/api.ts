@@ -227,6 +227,16 @@ export async function fetchTransactions(entityId?: string, year?: number, month?
   return requestJson<TransactionItem[]>(`/transactions${query}`, undefined, { entityId });
 }
 
+export async function reclassifyTransactions(entityId?: string): Promise<ApiResult<{ updated_categories: number; newly_ignored_rows: number; scanned_rows: number }>> {
+  return requestJson<{ updated_categories: number; newly_ignored_rows: number; scanned_rows: number }>(
+    "/transactions/reclassify",
+    {
+      method: "POST",
+    },
+    { entityId },
+  );
+}
+
 export async function fetchDocuments(entityId?: string): Promise<ApiResult<DocumentItem[]>> {
   return requestJson<DocumentItem[]>("/documents", undefined, { entityId });
 }
