@@ -17,8 +17,10 @@ type Props = {
   minConfidence?: number;
   onRetryParse?: (documentId: string) => Promise<void>;
   onMarkType?: (documentId: string, sourceType: ImportSourceType) => Promise<void>;
+  onDeleteDocument?: (documentId: string) => Promise<void>;
   retryingDocumentId?: string | null;
   updatingTypeDocumentId?: string | null;
+  deletingDocumentId?: string | null;
 };
 
 const SOURCE_TYPE_LABELS: Record<string, string> = {
@@ -42,8 +44,10 @@ export default function DocumentsTable({
   minConfidence,
   onRetryParse,
   onMarkType,
+  onDeleteDocument,
   retryingDocumentId,
   updatingTypeDocumentId,
+  deletingDocumentId,
 }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -190,8 +194,10 @@ export default function DocumentsTable({
                       onClose={() => setExpandedId(null)}
                       onRetryParse={onRetryParse ? async () => onRetryParse(row.id) : undefined}
                       onMarkType={onMarkType ? async (sourceType) => onMarkType(row.id, sourceType) : undefined}
+                      onDeleteDocument={onDeleteDocument ? async () => onDeleteDocument(row.id) : undefined}
                       isRetrying={retryingDocumentId === row.id}
                       isUpdatingType={updatingTypeDocumentId === row.id}
+                      isDeleting={deletingDocumentId === row.id}
                     />
                   )}
                 </Fragment>

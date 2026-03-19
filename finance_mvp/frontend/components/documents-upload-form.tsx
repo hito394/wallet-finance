@@ -9,6 +9,7 @@ import {
   fetchDocumentsByImportId,
   type DocumentItem,
   type ImportSourceType,
+  type UploadSourceSelection,
 } from "@/lib/api";
 import StatusMessage from "@/components/status-message";
 import UploadResultCard from "@/components/documents/UploadResultCard";
@@ -27,6 +28,11 @@ const SOURCE_TYPE_LABELS: Record<ImportSourceType, string> = {
 };
 
 const SOURCE_TYPES = Object.keys(SOURCE_TYPE_LABELS) as ImportSourceType[];
+const SOURCE_SELECTIONS: UploadSourceSelection[] = ["auto", ...SOURCE_TYPES];
+const SOURCE_SELECTION_LABELS: Record<UploadSourceSelection, string> = {
+  auto: "Auto Detect",
+  ...SOURCE_TYPE_LABELS,
+};
 
 type Props = {
   entityId?: string;
@@ -36,7 +42,7 @@ type Props = {
 export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
-  const [sourceType, setSourceType] = useState<ImportSourceType>("bank_statement");
+  const [sourceType, setSourceType] = useState<UploadSourceSelection>("auto");
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processedDoc, setProcessedDoc] = useState<DocumentItem | null>(null);
@@ -47,8 +53,8 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
     <div className="panel form-panel">
       <h3>Upload Financial Document</h3>
       <p className="muted">
-        Choose a source type, then upload a receipt, invoice, or statement. The AI pipeline will
-        classify, extract, and tag the document automatically.
+        Upload a receipt, invoice, or statement. Source type is auto-detected by default,
+        and you can still override it manually when needed.
       </p>
 
       <div className="form-grid">
@@ -57,11 +63,11 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
           <select
             className="input"
             value={sourceType}
-            onChange={(event) => setSourceType(event.target.value as ImportSourceType)}
+            onChange={(event) => setSourceType(event.target.value as UploadSourceSelection)}
           >
-            {SOURCE_TYPES.map((type) => (
+            {SOURCE_SELECTIONS.map((type) => (
               <option value={type} key={type}>
-                {SOURCE_TYPE_LABELS[type]}
+                {SOURCE_SELECTION_LABELS[type]}
               </option>
             ))}
           </select>
@@ -77,7 +83,7 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
               setProcessedDoc(null);
               setError(null);
             }}
-            accept=".pdf,.csv,.png,.jpg,.jpeg"
+            accept=".pdf,.csv,.png,.jpg,.jpeg,.webp,.ofx,.qfx"
           />
         </div>
       </div>

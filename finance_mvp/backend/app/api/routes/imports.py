@@ -1,5 +1,4 @@
 import hashlib
-from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -16,6 +15,54 @@ from app.services.ingestion.pipeline import process_import
 from app.utils.user_context import resolve_actor_context
 
 router = APIRouter()
+
+
+def _infer_source_type(file_name: str) -> ImportSourceType:
+    name = (file_name or "").lower()
+    suffix = Path(file_name or "").suffix.lower()
+
+    def has_any(*tokens: str) -> bool:
+        return any(token in name for token in tokens)
+
+    if suffix in {".ofx", ".qfx"}:
+        return ImportSourceType.bank_statement
+
+    if suffix == ".csv":
+        if has_any("credit", "card", "visa", "master", "amex", "jcb"):
+            return ImportSourceType.credit_card_statement
+        return ImportSourceType.bank_statement
+
+    if has_any("wallet", "screenshot", "screen-shot", "スクショ", "スクリーンショット"):
+        return ImportSourceType.wallet_screenshot
+
+    if has_any("refund", "返金", "chargeback"):
+        return ImportSourceType.refund_confirmation
+
+    if has_any("subscription", "subscr", "membership", "monthly", "月額", "定期"):
+        return ImportSourceType.subscription_billing_record
+
+    if has_any("paid-invoice", "invoice-paid", "paid invoice", "支払済", "支払い済"):
+        return ImportSourceType.paid_invoice
+
+    if has_any("invoice", "請求", "bill"):
+        return ImportSourceType.invoice
+
+    if has_any("email", "mail") and has_any("receipt", "invoice", "領収"):
+        return ImportSourceType.email_receipt
+
+    if has_any("receipt", "領収", "レシート"):
+        return ImportSourceType.receipt
+
+    if has_any("credit-card", "card-statement", "カード明細", "cc_"):
+        return ImportSourceType.credit_card_statement
+
+    if has_any("bank-statement", "statement", "account-activity", "取引明細", "明細"):
+        return ImportSourceType.bank_statement
+
+    if suffix in {".png", ".jpg", ".jpeg", ".webp"}:
+        return ImportSourceType.receipt
+
+    return ImportSourceType.financial_document
 
 
 def _upload_size(file: UploadFile) -> int:
@@ -52,9 +99,9 @@ def _run_import_job(import_id: str) -> None:
 
 @router.post("/upload", response_model=ImportJobRead, status_code=status.HTTP_201_CREATED)
 def upload_import(
-    source_type: ImportSourceType,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    source_type: ImportSourceType | None = None,
     x_user_id: str | None = Header(default=None),
     x_entity_id: str | None = Header(default=None),
     db: Session = Depends(get_db),
@@ -71,6 +118,7 @@ def upload_import(
     settings.file_storage_root.mkdir(parents=True, exist_ok=True)
 
     safe_name = Path(file.filename or "upload.bin").name
+    resolved_source_type = source_type or _infer_source_type(safe_name)
     destination = settings.file_storage_root / f"{uuid4()}_{safe_name}"
     file_hash = _persist_upload_and_hash(file, destination)
 
@@ -80,7 +128,7 @@ def upload_import(
         select(ImportJob)
         .where(
             ImportJob.entity_id == entity.id,
-            ImportJob.source_type == source_type,
+            ImportJob.source_type == resolved_source_type,
             ImportJob.file_hash == file_hash,
         )
         .order_by(ImportJob.created_at.desc())
@@ -91,7 +139,7 @@ def upload_import(
     job = ImportJob(
         user_id=user.id,
         entity_id=entity.id,
-        source_type=source_type,
+        source_type=resolved_source_type,
         status=ImportStatus.pending,
         file_name=safe_name,
         file_hash=file_hash,

@@ -124,6 +124,8 @@ export type ImportSourceType =
   | "wallet_screenshot"
   | "email_receipt";
 
+export type UploadSourceSelection = ImportSourceType | "auto";
+
 export type ImportJob = {
   id: string;
   entity_id: string;
@@ -315,12 +317,16 @@ export async function fetchLearningFeedback(entityId?: string): Promise<ApiResul
 
 export async function uploadDocument(
   file: File,
-  sourceType: ImportSourceType,
+  sourceType: UploadSourceSelection,
   entityId?: string,
 ): Promise<ApiResult<ImportJob>> {
   const form = new FormData();
   form.set("file", file);
-  const path = `/imports/upload?source_type=${encodeURIComponent(sourceType)}`;
+  const query =
+    sourceType && sourceType !== "auto"
+      ? `?source_type=${encodeURIComponent(sourceType)}`
+      : "";
+  const path = `/imports/upload${query}`;
   const url = `${resolveApiBaseUrl()}${path}`;
 
   try {
@@ -339,6 +345,27 @@ export async function uploadDocument(
     return { data, error: null, status: response.status };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Upload failed";
+    return { data: null, error: message, status: null };
+  }
+}
+
+export async function deleteDocument(
+  documentId: string,
+  entityId?: string,
+): Promise<ApiResult<null>> {
+  const url = `${resolveApiBaseUrl()}/documents/${encodeURIComponent(documentId)}`;
+  try {
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: entityHeaders(entityId),
+    });
+    if (!response.ok) {
+      const errorMessage = await parseErrorMessage(response);
+      return { data: null, error: errorMessage, status: response.status };
+    }
+    return { data: null, error: null, status: response.status };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Delete failed";
     return { data: null, error: message, status: null };
   }
 }

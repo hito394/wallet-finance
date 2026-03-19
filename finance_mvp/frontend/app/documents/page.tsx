@@ -6,6 +6,7 @@ import Link from "next/link";
 import DocumentsTable from "@/components/documents-table";
 import DocumentsUploadForm from "@/components/documents-upload-form";
 import {
+  deleteDocument,
   fetchDocuments,
   fetchEntities,
   fetchReviewQueue,
@@ -35,6 +36,7 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [retryingDocumentId, setRetryingDocumentId] = useState<string | null>(null);
   const [updatingTypeDocumentId, setUpdatingTypeDocumentId] = useState<string | null>(null);
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
 
   const load = async (eid?: string) => {
     setLoading(true);
@@ -87,6 +89,18 @@ export default function DocumentsPage() {
     setUpdatingTypeDocumentId(null);
     if (result.error) {
       setError(result.error || "Failed to update type hint");
+      return;
+    }
+    await load(entityId);
+  };
+
+  const handleDeleteDocument = async (documentId: string) => {
+    setDeletingDocumentId(documentId);
+    setError(null);
+    const result = await deleteDocument(documentId, entityId);
+    setDeletingDocumentId(null);
+    if (result.error) {
+      setError(result.error || "Failed to delete uploaded document");
       return;
     }
     await load(entityId);
@@ -265,8 +279,10 @@ export default function DocumentsPage() {
           minConfidence={minConfidence}
           onRetryParse={handleRetryParse}
           onMarkType={handleMarkType}
+          onDeleteDocument={handleDeleteDocument}
           retryingDocumentId={retryingDocumentId}
           updatingTypeDocumentId={updatingTypeDocumentId}
+          deletingDocumentId={deletingDocumentId}
         />
       )}
     </div>
