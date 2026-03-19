@@ -13,6 +13,7 @@ CATEGORY_RULES = {
     "Travel": ["hotel", "airlines", "airbnb", "booking", "jal", "ana", "shinkansen", "expedia"],
     "Entertainment": ["cinema", "movie", "steam", "xbox", "playstation", "hulu", "disney+"],
     "Health": ["pharmacy", "hospital", "clinic", "dental", "drug store", "welcia", "matsumoto kiyoshi"],
+    "Education": ["university", "college", "tuition", "student", "school", "tamu", "tamu applications", "parchment", "bookstore", "tech bookstore", "tech campus"],
     "Subscriptions": ["netflix", "spotify", "subscription", "apple services", "icloud", "google one", "adobe", "chatgpt", "openai", "peacock"],
     "Income": ["salary", "payroll", "direct deposit", "bonus", "interest", "dividend", "refund", "reimbursement", "給与", "給料", "入金", "配当", "還付"],
     "Transfers": ["transfer", "zelle", "venmo", "cash app", "wire", "wise", "振込", "振替", "送金", "立替", "payment thank you", "payment thank", "autopay", "onlinepayment", "online payment"],
@@ -27,6 +28,25 @@ class CategorizationResult:
 
 
 _LEADING_REF_PATTERN = re.compile(r"^(?:\d{10,}\s+)+")
+
+# Patterns that indicate statement artifacts/noise rather than real transactions
+_NOISE_PATTERNS = [
+    "frgnamt:",
+    "payment reversal",
+    "payment rev-",
+    "reposted payment",
+    "new balance",
+    "minimum payment",
+    "payment due",
+    "account summary",
+    "starting balance",
+    "ending balance",
+]
+
+
+def _is_noise_transaction(text: str) -> bool:
+    """Check if transaction is a statement artifact rather than real spending."""
+    return any(pattern in text for pattern in _NOISE_PATTERNS)
 
 
 def _sanitize_text(text: str) -> str:
@@ -44,6 +64,10 @@ def categorize_transaction(
 ) -> CategorizationResult:
     normalized = normalize_merchant(merchant_raw)
     text = _sanitize_text(f"{normalized} {description}")
+
+    # Check for statement noise/artifacts first
+    if _is_noise_transaction(text):
+        return CategorizationResult(category="Uncategorized", confidence=0.0, strategy="noise_artifact")
 
     # Distinguish common money-in patterns before generic category matching.
     if direction == "credit":

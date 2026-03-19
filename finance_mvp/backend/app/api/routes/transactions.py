@@ -141,6 +141,13 @@ def reclassify_transactions(
             direction=tx.direction.value if hasattr(tx.direction, "value") else str(tx.direction),
             source=tx.source.value if hasattr(tx.source, "value") else str(tx.source),
         )
+
+        # Automatically ignore noise artifacts detected by categorizer
+        if cat.strategy == "noise_artifact":
+            tx.is_ignored = True
+            newly_ignored_rows += 1
+            continue
+
         category = _get_or_create_category(db, entity.id, cat.category)
 
         if tx.category_id != category.id:
