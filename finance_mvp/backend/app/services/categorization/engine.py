@@ -1,20 +1,21 @@
 from dataclasses import dataclass
+import re
 
 from app.services.normalization.merchant_normalizer import normalize_merchant
 
 CATEGORY_RULES = {
-    "Food": ["restaurant", "uber eats", "doordash", "coffee", "starbucks", "mcdonald", "kfc", "sushi", "ramen"],
-    "Groceries": ["walmart", "costco", "whole foods", "market", "grocery", "supermarket", "trader joe", "seiyu", "aeon", "maxvalu", "donki", "コンビニ", "7-eleven", "familymart", "lawson"],
-    "Transportation": ["uber", "lyft", "shell", "exxon", "train", "jr", "suica", "pasmo", "icoca", "gas station", "toll", "parking", "taxi"],
-    "Shopping": ["amazon", "target", "best buy", "shop", "rakuten", "mercari", "yodobashi", "bic camera"],
+    "Food": ["restaurant", "uber eats", "doordash", "coffee", "starbucks", "mcdonald", "kfc", "sushi", "ramen", "texasroadhouse", "parisbaguette", "tst*"],
+    "Groceries": ["walmart", "costco", "whole foods", "market", "grocery", "supermarket", "trader joe", "seiyu", "aeon", "maxvalu", "donki", "コンビニ", "7-eleven", "familymart", "lawson", "h-e-b", "heb", "mitsuwa"],
+    "Transportation": ["uber", "lyft", "shell", "exxon", "train", "jr", "suica", "pasmo", "icoca", "gas station", "toll", "parking", "taxi", "ntta", "tolltag"],
+    "Shopping": ["amazon", "target", "best buy", "shop", "rakuten", "mercari", "yodobashi", "bic camera", "urbanoutfitters", "legacyer"],
     "Rent": ["rent", "landlord", "apartment"],
     "Utilities": ["electric", "water", "internet", "gas bill", "electricity", "utility", "nuro", "docomo", "softbank", "au"],
     "Travel": ["hotel", "airlines", "airbnb", "booking", "jal", "ana", "shinkansen", "expedia"],
     "Entertainment": ["cinema", "movie", "steam", "xbox", "playstation", "hulu", "disney+"],
     "Health": ["pharmacy", "hospital", "clinic", "dental", "drug store", "welcia", "matsumoto kiyoshi"],
-    "Subscriptions": ["netflix", "spotify", "subscription", "apple services", "icloud", "google one", "adobe"],
+    "Subscriptions": ["netflix", "spotify", "subscription", "apple services", "icloud", "google one", "adobe", "chatgpt", "openai", "peacock"],
     "Income": ["salary", "payroll", "direct deposit", "bonus", "interest", "dividend", "refund", "reimbursement", "給与", "給料", "入金", "配当", "還付"],
-    "Transfers": ["transfer", "zelle", "venmo", "cash app", "wire", "wise", "振込", "振替", "送金", "立替", "payment thank you", "autopay"],
+    "Transfers": ["transfer", "zelle", "venmo", "cash app", "wire", "wise", "振込", "振替", "送金", "立替", "payment thank you", "payment thank", "autopay", "onlinepayment", "online payment"],
 }
 
 
@@ -25,6 +26,15 @@ class CategorizationResult:
     strategy: str
 
 
+_LEADING_REF_PATTERN = re.compile(r"^(?:\d{10,}\s+)+")
+
+
+def _sanitize_text(text: str) -> str:
+    cleaned = _LEADING_REF_PATTERN.sub("", text.strip().lower())
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned
+
+
 def categorize_transaction(
     merchant_raw: str,
     description: str,
@@ -33,7 +43,7 @@ def categorize_transaction(
     source: str | None = None,
 ) -> CategorizationResult:
     normalized = normalize_merchant(merchant_raw)
-    text = f"{normalized} {description}".lower()
+    text = _sanitize_text(f"{normalized} {description}")
 
     # Distinguish common money-in patterns before generic category matching.
     if direction == "credit":

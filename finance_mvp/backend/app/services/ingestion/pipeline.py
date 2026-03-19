@@ -261,7 +261,7 @@ def process_import(
             for item in parsed_transactions:
                 merchant_normalized = normalize_merchant(item.merchant_raw)
                 category_result = categorize_transaction(
-                    item.merchant_raw,
+                    merchant_normalized,
                     item.description,
                     direction=item.direction,
                     source=item.source,
