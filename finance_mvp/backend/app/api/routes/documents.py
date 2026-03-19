@@ -12,7 +12,13 @@ from app.models.import_job import ImportJob, ImportStatus
 from app.models.receipt import Receipt
 from app.models.review_queue import ReviewQueueItem
 from app.models.transaction import Transaction
-from app.schemas.document import DocumentTypeHintUpdate, FinancialDocumentRead, ReparseDocumentResponse
+from app.schemas.document import (
+    BulkDeleteDocumentsRequest,
+    BulkDeleteDocumentsResponse,
+    DocumentTypeHintUpdate,
+    FinancialDocumentRead,
+    ReparseDocumentResponse,
+)
 from app.services.ingestion.pipeline import process_import
 from app.utils.user_context import resolve_actor_context
 
@@ -34,6 +40,70 @@ def _cleanup_upload_files(paths: set[str]) -> None:
         except Exception:
             # Cleanup is best-effort and should not break API flow.
             continue
+
+
+def _delete_document_and_related(db: Session, *, entity_id, doc: FinancialDocument) -> set[str]:
+    import_id = doc.import_id
+    paths_to_cleanup: set[str] = {doc.storage_uri}
+
+    tx_conditions = [Transaction.document_id == doc.id]
+    if import_id:
+        tx_conditions.append(Transaction.import_id == import_id)
+
+    transaction_ids_subquery = select(Transaction.id).where(
+        Transaction.entity_id == entity_id,
+        or_(*tx_conditions),
+    )
+
+    db.execute(
+        delete(ReviewQueueItem).where(
+            ReviewQueueItem.entity_id == entity_id,
+            or_(
+                ReviewQueueItem.document_id == doc.id,
+                ReviewQueueItem.transaction_id.in_(transaction_ids_subquery),
+            ),
+        )
+    )
+
+    db.execute(
+        delete(Transaction).where(
+            Transaction.entity_id == entity_id,
+            or_(*tx_conditions),
+        )
+    )
+
+    if import_id:
+        db.execute(
+            delete(Receipt).where(
+                Receipt.entity_id == entity_id,
+                Receipt.import_id == import_id,
+            )
+        )
+
+    db.execute(
+        delete(FinancialDocument).where(
+            FinancialDocument.id == doc.id,
+            FinancialDocument.entity_id == entity_id,
+        )
+    )
+
+    if import_id:
+        job = db.scalar(
+            select(ImportJob).where(
+                ImportJob.id == import_id,
+                ImportJob.entity_id == entity_id,
+            )
+        )
+        if job:
+            paths_to_cleanup.add(job.storage_uri)
+            db.execute(
+                delete(ImportJob).where(
+                    ImportJob.id == job.id,
+                    ImportJob.entity_id == entity_id,
+                )
+            )
+
+    return paths_to_cleanup
 
 
 def _run_reparse(import_id: str) -> None:
@@ -182,6 +252,36 @@ def update_type_hint(
     return doc
 
 
+@router.post("/bulk-delete", response_model=BulkDeleteDocumentsResponse)
+def bulk_delete_documents(
+    payload: BulkDeleteDocumentsRequest,
+    x_user_id: str | None = Header(default=None),
+    x_entity_id: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> BulkDeleteDocumentsResponse:
+    _, entity = resolve_actor_context(db, x_user_id, x_entity_id)
+
+    docs = list(
+        db.scalars(
+            select(FinancialDocument).where(
+                FinancialDocument.entity_id == entity.id,
+                FinancialDocument.id.in_(payload.document_ids),
+            )
+        ).all()
+    )
+
+    if not docs:
+        return BulkDeleteDocumentsResponse(deleted_count=0)
+
+    paths_to_cleanup: set[str] = set()
+    for doc in docs:
+        paths_to_cleanup.update(_delete_document_and_related(db, entity_id=entity.id, doc=doc))
+
+    db.commit()
+    _cleanup_upload_files(paths_to_cleanup)
+    return BulkDeleteDocumentsResponse(deleted_count=len(docs))
+
+
 @router.delete(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -210,64 +310,7 @@ def delete_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    import_id = doc.import_id
-    paths_to_cleanup: set[str] = {doc.storage_uri}
-    tx_conditions = [Transaction.document_id == doc.id]
-    if import_id:
-        tx_conditions.append(Transaction.import_id == import_id)
-
-    transaction_ids_subquery = select(Transaction.id).where(
-        Transaction.entity_id == entity.id,
-        or_(*tx_conditions),
-    )
-
-    db.execute(
-        delete(ReviewQueueItem).where(
-            ReviewQueueItem.entity_id == entity.id,
-            or_(
-                ReviewQueueItem.document_id == doc.id,
-                ReviewQueueItem.transaction_id.in_(transaction_ids_subquery),
-            ),
-        )
-    )
-
-    db.execute(
-        delete(Transaction).where(
-            Transaction.entity_id == entity.id,
-            or_(*tx_conditions),
-        )
-    )
-
-    if import_id:
-        db.execute(
-            delete(Receipt).where(
-                Receipt.entity_id == entity.id,
-                Receipt.import_id == import_id,
-            )
-        )
-
-    db.execute(
-        delete(FinancialDocument).where(
-            FinancialDocument.id == doc.id,
-            FinancialDocument.entity_id == entity.id,
-        )
-    )
-
-    if import_id:
-        job = db.scalar(
-            select(ImportJob).where(
-                ImportJob.id == import_id,
-                ImportJob.entity_id == entity.id,
-            )
-        )
-        if job:
-            paths_to_cleanup.add(job.storage_uri)
-            db.execute(
-                delete(ImportJob).where(
-                    ImportJob.id == job.id,
-                    ImportJob.entity_id == entity.id,
-                )
-            )
+    paths_to_cleanup = _delete_document_and_related(db, entity_id=entity.id, doc=doc)
 
     db.commit()
     _cleanup_upload_files(paths_to_cleanup)

@@ -370,6 +370,24 @@ export async function deleteDocument(
   }
 }
 
+export async function bulkDeleteDocuments(
+  documentIds: string[],
+  entityId?: string,
+): Promise<ApiResult<{ deleted_count: number }>> {
+  if (!documentIds.length) {
+    return { data: { deleted_count: 0 }, error: null, status: 200 };
+  }
+  return requestJson<{ deleted_count: number }>(
+    "/documents/bulk-delete",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document_ids: documentIds }),
+    },
+    { entityId },
+  );
+}
+
 export async function downloadAccountingCsv(entityId?: string): Promise<ApiResult<Blob>> {
   const url = `${resolveApiBaseUrl()}/exports/accounting.csv`;
   try {

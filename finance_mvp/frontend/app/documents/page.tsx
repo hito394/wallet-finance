@@ -6,6 +6,7 @@ import Link from "next/link";
 import DocumentsTable from "@/components/documents-table";
 import DocumentsUploadForm from "@/components/documents-upload-form";
 import {
+  bulkDeleteDocuments,
   deleteDocument,
   fetchDocuments,
   fetchEntities,
@@ -37,6 +38,7 @@ export default function DocumentsPage() {
   const [retryingDocumentId, setRetryingDocumentId] = useState<string | null>(null);
   const [updatingTypeDocumentId, setUpdatingTypeDocumentId] = useState<string | null>(null);
   const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   const load = async (eid?: string) => {
     setLoading(true);
@@ -101,6 +103,19 @@ export default function DocumentsPage() {
     setDeletingDocumentId(null);
     if (result.error) {
       setError(result.error || "Failed to delete uploaded document");
+      return;
+    }
+    await load(entityId);
+  };
+
+  const handleBulkDeleteDocuments = async (documentIds: string[]) => {
+    if (!documentIds.length) return;
+    setIsBulkDeleting(true);
+    setError(null);
+    const result = await bulkDeleteDocuments(documentIds, entityId);
+    setIsBulkDeleting(false);
+    if (result.error) {
+      setError(result.error || "Failed to bulk delete uploaded documents");
       return;
     }
     await load(entityId);
@@ -280,9 +295,11 @@ export default function DocumentsPage() {
           onRetryParse={handleRetryParse}
           onMarkType={handleMarkType}
           onDeleteDocument={handleDeleteDocument}
+          onBulkDelete={handleBulkDeleteDocuments}
           retryingDocumentId={retryingDocumentId}
           updatingTypeDocumentId={updatingTypeDocumentId}
           deletingDocumentId={deletingDocumentId}
+          isBulkDeleting={isBulkDeleting}
         />
       )}
     </div>

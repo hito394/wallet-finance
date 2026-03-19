@@ -65,6 +65,90 @@ def _infer_source_type(file_name: str) -> ImportSourceType:
     return ImportSourceType.financial_document
 
 
+def _infer_source_type_from_content(file_path: Path, file_name: str) -> ImportSourceType | None:
+    suffix = file_path.suffix.lower()
+
+    def classify_text(raw_text: str) -> ImportSourceType | None:
+        text = (raw_text or "").lower()
+        if not text:
+            return None
+
+        card_hints = (
+            "credit card",
+            "cardmember",
+            "payment due",
+            "minimum payment",
+            "visa",
+            "mastercard",
+            "amex",
+            "jcb",
+            "カード",
+        )
+        bank_hints = (
+            "account statement",
+            "account activity",
+            "available balance",
+            "deposits",
+            "withdrawals",
+            "bank statement",
+            "残高",
+            "口座",
+            "入出金",
+        )
+        receipt_hints = (
+            "receipt",
+            "thank you",
+            "subtotal",
+            "tax",
+            "total",
+            "領収",
+            "レシート",
+        )
+        invoice_hints = (
+            "invoice",
+            "bill to",
+            "invoice #",
+            "due date",
+            "請求",
+            "請求書",
+        )
+
+        if any(hint in text for hint in card_hints):
+            return ImportSourceType.credit_card_statement
+        if any(hint in text for hint in bank_hints):
+            return ImportSourceType.bank_statement
+        if any(hint in text for hint in invoice_hints):
+            return ImportSourceType.invoice
+        if any(hint in text for hint in receipt_hints):
+            return ImportSourceType.receipt
+        return None
+
+    try:
+        if suffix in {".csv", ".ofx", ".qfx", ".txt"}:
+            sample = file_path.read_text(encoding="utf-8", errors="ignore")[:12000]
+            return classify_text(sample)
+
+        if suffix == ".pdf":
+            try:
+                pdfplumber = __import__("pdfplumber")
+                with pdfplumber.open(str(file_path)) as pdf:
+                    pages = pdf.pages[:2]
+                    sample = "\n".join((page.extract_text() or "") for page in pages)[:20000]
+                classified = classify_text(sample)
+                if classified:
+                    return classified
+            except Exception:
+                return None
+    except Exception:
+        return None
+
+    # Filename remains fallback for media files where OCR is expensive here.
+    if suffix in {".png", ".jpg", ".jpeg", ".webp"}:
+        return _infer_source_type(file_name)
+
+    return None
+
+
 def _upload_size(file: UploadFile) -> int:
     if file.size is not None:
         return file.size
@@ -118,9 +202,13 @@ def upload_import(
     settings.file_storage_root.mkdir(parents=True, exist_ok=True)
 
     safe_name = Path(file.filename or "upload.bin").name
-    resolved_source_type = source_type or _infer_source_type(safe_name)
     destination = settings.file_storage_root / f"{uuid4()}_{safe_name}"
     file_hash = _persist_upload_and_hash(file, destination)
+
+    if source_type is not None:
+        resolved_source_type = source_type
+    else:
+        resolved_source_type = _infer_source_type_from_content(destination, safe_name) or _infer_source_type(safe_name)
 
     # Idempotency guard: same entity + source_type + content hash reuses the
     # existing import job to avoid duplicate document/transaction rows.

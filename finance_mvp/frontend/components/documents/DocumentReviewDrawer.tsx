@@ -11,6 +11,7 @@ import DocumentTypeBadge from "./DocumentTypeBadge";
 type Props = {
   doc: DocumentItem;
   onClose: () => void;
+  colSpan?: number;
   onRetryParse?: () => Promise<void>;
   onMarkType?: (sourceType: ImportSourceType) => Promise<void>;
   onDeleteDocument?: () => Promise<void>;
@@ -35,6 +36,7 @@ const TYPE_OPTIONS: ImportSourceType[] = [
 export default function DocumentReviewDrawer({
   doc,
   onClose,
+  colSpan = 10,
   onRetryParse,
   onMarkType,
   onDeleteDocument,
@@ -51,7 +53,7 @@ export default function DocumentReviewDrawer({
 
   return (
     <tr>
-      <td colSpan={10} style={{ padding: 0 }}>
+      <td colSpan={colSpan} style={{ padding: 0 }}>
         <div
           style={{
             background: "#f8fafc",

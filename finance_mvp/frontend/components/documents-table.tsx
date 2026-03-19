@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 import type { DocumentItem } from "@/lib/api";
 import type { ImportSourceType } from "@/lib/api";
@@ -18,9 +18,11 @@ type Props = {
   onRetryParse?: (documentId: string) => Promise<void>;
   onMarkType?: (documentId: string, sourceType: ImportSourceType) => Promise<void>;
   onDeleteDocument?: (documentId: string) => Promise<void>;
+  onBulkDelete?: (documentIds: string[]) => Promise<void>;
   retryingDocumentId?: string | null;
   updatingTypeDocumentId?: string | null;
   deletingDocumentId?: string | null;
+  isBulkDeleting?: boolean;
 };
 
 const SOURCE_TYPE_LABELS: Record<string, string> = {
@@ -45,11 +47,14 @@ export default function DocumentsTable({
   onRetryParse,
   onMarkType,
   onDeleteDocument,
+  onBulkDelete,
   retryingDocumentId,
   updatingTypeDocumentId,
   deletingDocumentId,
+  isBulkDeleting,
 }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const isStatement = (row: DocumentItem) =>
     row.document_type === "bank_statement" ||
@@ -80,6 +85,24 @@ export default function DocumentsTable({
     return true;
   });
 
+  useEffect(() => {
+    const visibleIds = new Set(visible.map((row) => row.id));
+    setSelectedIds((current) => {
+      const next = new Set<string>();
+      for (const id of current) {
+        if (visibleIds.has(id)) next.add(id);
+      }
+      return next;
+    });
+  }, [visible]);
+
+  const allVisibleSelected = useMemo(
+    () => visible.length > 0 && visible.every((row) => selectedIds.has(row.id)),
+    [visible, selectedIds],
+  );
+
+  const selectedCount = selectedIds.size;
+
   if (visible.length === 0) {
     return (
       <div className="empty-state">
@@ -92,10 +115,63 @@ export default function DocumentsTable({
 
   return (
     <div className="panel table-panel">
+      {onBulkDelete && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: "#64748b" }}>
+            {selectedCount > 0 ? `${selectedCount} selected` : "Select rows to bulk delete"}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className="btn"
+              disabled={selectedCount === 0 || !!isBulkDeleting}
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              className="btn"
+              style={{
+                background: "#fef2f2",
+                border: "1px solid #fca5a5",
+                color: "#b91c1c",
+                fontWeight: 700,
+              }}
+              disabled={selectedCount === 0 || !!isBulkDeleting}
+              onClick={async () => {
+                const confirmed = window.confirm(
+                  `Delete ${selectedCount} selected uploads and related extracted data? This cannot be undone.`,
+                );
+                if (!confirmed) return;
+                await onBulkDelete(Array.from(selectedIds));
+                setSelectedIds(new Set());
+                setExpandedId(null);
+              }}
+            >
+              {isBulkDeleting ? "Deleting..." : `Delete Selected (${selectedCount})`}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
+              <th style={{ width: 36, textAlign: "center" }}>
+                <input
+                  type="checkbox"
+                  aria-label="Select all visible documents"
+                  checked={allVisibleSelected}
+                  onChange={(event) => {
+                    if (event.target.checked) {
+                      setSelectedIds(new Set(visible.map((row) => row.id)));
+                    } else {
+                      setSelectedIds(new Set());
+                    }
+                  }}
+                />
+              </th>
               <th style={{ width: 24 }} />
               <th>Selected Type</th>
               <th>Detected Type</th>
@@ -124,6 +200,19 @@ export default function DocumentsTable({
                     }}
                     onClick={() => setExpandedId(isExpanded ? null : row.id)}
                   >
+                    <td style={{ textAlign: "center" }} onClick={(event) => event.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${row.source_name}`}
+                        checked={selectedIds.has(row.id)}
+                        onChange={(event) => {
+                          const next = new Set(selectedIds);
+                          if (event.target.checked) next.add(row.id);
+                          else next.delete(row.id);
+                          setSelectedIds(next);
+                        }}
+                      />
+                    </td>
                     <td style={{ textAlign: "center", color: "#94a3b8", fontSize: 12 }}>
                       {isExpanded ? "▲" : "▼"}
                     </td>
@@ -195,6 +284,7 @@ export default function DocumentsTable({
                       onRetryParse={onRetryParse ? async () => onRetryParse(row.id) : undefined}
                       onMarkType={onMarkType ? async (sourceType) => onMarkType(row.id, sourceType) : undefined}
                       onDeleteDocument={onDeleteDocument ? async () => onDeleteDocument(row.id) : undefined}
+                      colSpan={11}
                       isRetrying={retryingDocumentId === row.id}
                       isUpdatingType={updatingTypeDocumentId === row.id}
                       isDeleting={deletingDocumentId === row.id}
