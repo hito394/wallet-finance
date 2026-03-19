@@ -14,7 +14,7 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -219,13 +219,17 @@ def sync_item(
     return result
 
 
-@router.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/items/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
 def disconnect_bank(
     item_id: str,
     x_user_id: str | None = Header(default=None),
     x_entity_id: str | None = Header(default=None),
     db: Session = Depends(get_db),
-) -> None:
+) -> Response:
     """Disconnect a bank (marks all its accounts inactive, removes access_token)."""
     user, _ = resolve_actor_context(db, x_user_id, x_entity_id)
     item = _get_item_or_404(db, item_id, user.id)
@@ -243,3 +247,4 @@ def disconnect_bank(
         ba.is_active = False
 
     db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
