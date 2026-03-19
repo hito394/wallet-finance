@@ -185,7 +185,7 @@ def _run_import_job(import_id: str) -> None:
 def upload_import(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    source_type: ImportSourceType | None = None,
+    source_type: str | None = None,
     x_user_id: str | None = Header(default=None),
     x_entity_id: str | None = Header(default=None),
     db: Session = Depends(get_db),
@@ -205,8 +205,19 @@ def upload_import(
     destination = settings.file_storage_root / f"{uuid4()}_{safe_name}"
     file_hash = _persist_upload_and_hash(file, destination)
 
-    if source_type is not None:
-        resolved_source_type = source_type
+    parsed_source_type: ImportSourceType | None = None
+    if source_type and source_type.lower() != "auto":
+        try:
+            parsed_source_type = ImportSourceType(source_type)
+        except ValueError as exc:
+            allowed_values = ", ".join(t.value for t in ImportSourceType)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid source_type '{source_type}'. Allowed values: {allowed_values}, auto",
+            ) from exc
+
+    if parsed_source_type is not None:
+        resolved_source_type = parsed_source_type
     else:
         resolved_source_type = _infer_source_type_from_content(destination, safe_name) or _infer_source_type(safe_name)
 
