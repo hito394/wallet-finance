@@ -7,12 +7,16 @@
 
 @layer base {
   :root {
-    --color-brand: 67 97 238;
-    --color-surface: 248 249 252;
+    --color-brand: 124 111 255;
+    --color-bg: 11 12 20;
+    --color-card: 19 21 31;
+    --color-border: 30 32 48;
   }
 
   body {
-    @apply bg-surface text-gray-800 antialiased;
+    background-color: #0B0C14;
+    color: #E2E8F0;
+    @apply antialiased;
     font-feature-settings: "kern" 1;
   }
 
@@ -24,7 +28,9 @@
 @layer components {
   /* カード */
   .card {
-    @apply bg-white rounded-2xl border border-gray-100 shadow-sm;
+    background-color: #13151F;
+    border: 1px solid #1E2030;
+    @apply rounded-2xl;
   }
 
   /* プライマリボタン */
@@ -32,15 +38,21 @@
     @apply inline-flex items-center gap-2 px-4 py-2 rounded-xl
            bg-brand-500 text-white font-medium text-sm
            hover:bg-brand-600 active:bg-brand-700
-           transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+           transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed;
   }
 
   /* セカンダリボタン */
   .btn-secondary {
     @apply inline-flex items-center gap-2 px-4 py-2 rounded-xl
-           bg-white text-gray-700 font-medium text-sm border border-gray-200
-           hover:bg-gray-50 active:bg-gray-100
+           font-medium text-sm border
            transition-colors duration-150;
+    background-color: #1E2030;
+    border-color: #2A2D42;
+    color: #94A3B8;
+  }
+  .btn-secondary:hover {
+    background-color: #252840;
+    color: #E2E8F0;
   }
 
   /* バッジ */
@@ -50,19 +62,23 @@
 
   /* テーブルセル */
   .td {
-    @apply px-4 py-3 text-sm text-gray-700 whitespace-nowrap;
+    @apply px-4 py-3 text-sm whitespace-nowrap;
+    color: #94A3B8;
   }
 }
 
-/* スクロールバーのスタイル */
+/* スクロールバー */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: #2A2D42;
   border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3A3D56;
 }

@@ -7,7 +7,6 @@ import type { Transaction } from '@/types';
 import clsx from 'clsx';
 import { Pencil, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 
-// SWR用フェッチャー
 const fetcher = (params: Record<string, string | number | boolean>) =>
   getTransactions(params);
 
@@ -29,9 +28,9 @@ export default function TransactionsPage() {
     () => fetcher({
       page,
       per_page: 50,
-      ...(search && { search }),
+      ...(search    && { search }),
       ...(direction && { direction }),
-      ...(category && { category }),
+      ...(category  && { category }),
     }),
     { keepPreviousData: true }
   );
@@ -45,45 +44,81 @@ export default function TransactionsPage() {
     [mutate]
   );
 
+  const thStyle = {
+    padding: '12px 16px',
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#475569',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.05em',
+    borderBottom: '1px solid #1E2030',
+  };
+
   return (
     <div className="p-6 md:p-8 space-y-5 max-w-7xl mx-auto">
-      <h2 className="text-2xl font-bold text-gray-900">取引一覧</h2>
+      <div>
+        <h2 className="text-xl font-bold" style={{ color: '#F1F5F9' }}>取引一覧</h2>
+        {data && (
+          <p className="text-xs mt-1" style={{ color: '#475569' }}>
+            {data.total}件の取引
+          </p>
+        )}
+      </div>
 
-      {/* フィルターバー */}
+      {/* Filter bar */}
       <div className="flex flex-wrap gap-3">
-        {/* 検索 */}
+        {/* Search */}
         <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2"
+            style={{ color: '#475569' }}
+          />
           <input
             type="text"
             placeholder="店名・摘要で検索"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 w-52"
+            className="pl-9 pr-4 py-2 text-sm rounded-xl w-52 focus:outline-none"
+            style={{
+              backgroundColor: '#13151F',
+              border: '1px solid #2A2D42',
+              color: '#CBD5E1',
+            }}
           />
         </div>
 
-        {/* 収支フィルタ */}
-        <div className="flex rounded-xl border border-gray-200 overflow-hidden text-sm">
+        {/* Direction toggle */}
+        <div
+          className="flex rounded-xl overflow-hidden text-sm"
+          style={{ border: '1px solid #2A2D42' }}
+        >
           {DIRECTIONS.map((d) => (
             <button
               key={d.value}
               onClick={() => { setDirection(d.value); setPage(1); }}
-              className={clsx(
-                'px-3 py-2 transition-colors',
-                direction === d.value ? 'bg-brand-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
-              )}
+              className="px-3 py-2 transition-colors font-medium"
+              style={
+                direction === d.value
+                  ? { backgroundColor: '#7C6FFF', color: '#fff' }
+                  : { backgroundColor: '#13151F', color: '#64748B' }
+              }
             >
               {d.label}
             </button>
           ))}
         </div>
 
-        {/* カテゴリフィルタ */}
+        {/* Category select */}
         <select
           value={category}
           onChange={(e) => { setCategory(e.target.value); setPage(1); }}
-          className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/30 bg-white"
+          className="px-3 py-2 text-sm rounded-xl focus:outline-none"
+          style={{
+            backgroundColor: '#13151F',
+            border: '1px solid #2A2D42',
+            color: '#94A3B8',
+          }}
         >
           <option value="">全カテゴリ</option>
           {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
@@ -92,89 +127,139 @@ export default function TransactionsPage() {
         </select>
       </div>
 
-      {/* テーブル */}
-      <div className="card overflow-hidden">
+      {/* Table */}
+      <div
+        className="rounded-2xl overflow-hidden"
+        style={{ backgroundColor: '#13151F', border: '1px solid #1E2030' }}
+      >
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-100 text-left">
-                <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">日付</th>
-                <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">店名</th>
-                <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">カテゴリ</th>
-                <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">金額</th>
-                <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">ソース</th>
-                <th className="px-4 py-3"></th>
+              <tr>
+                <th style={{ ...thStyle, textAlign: 'left' }}>日付</th>
+                <th style={{ ...thStyle, textAlign: 'left' }}>店名</th>
+                <th style={{ ...thStyle, textAlign: 'left' }}>カテゴリ</th>
+                <th style={{ ...thStyle, textAlign: 'right' }}>金額</th>
+                <th style={{ ...thStyle, textAlign: 'left' }}>ソース</th>
+                <th style={{ ...thStyle }}></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody>
               {isLoading && (
-                <tr><td colSpan={6} className="text-center py-12 text-sm text-gray-400">読み込み中...</td></tr>
-              )}
-              {!isLoading && data?.items.length === 0 && (
-                <tr><td colSpan={6} className="text-center py-12 text-sm text-gray-400">取引が見つかりません</td></tr>
-              )}
-              {data?.items.map((tx) => (
-                <tr
-                  key={tx.id}
-                  className={clsx(
-                    'hover:bg-gray-50 transition-colors',
-                    tx.is_ignored && 'opacity-40'
-                  )}
-                >
-                  <td className="td text-gray-500">{formatDate(tx.transaction_date)}</td>
-                  <td className="td font-medium text-gray-800 max-w-xs truncate">
-                    {tx.merchant_normalized ?? tx.merchant_raw}
-                  </td>
-                  <td className="td">
-                    <span
-                      className="badge text-white text-xs"
-                      style={{ background: CATEGORY_COLORS[tx.category ?? 'other'] ?? '#DFE6E9' }}
-                    >
-                      {CATEGORY_LABELS[tx.category ?? 'other'] ?? tx.category}
-                    </span>
-                  </td>
-                  <td className={clsx(
-                    'td text-right font-semibold tabular-nums',
-                    tx.direction === 'credit' ? 'text-emerald-600' : 'text-gray-800'
-                  )}>
-                    {tx.direction === 'credit' ? '+' : ''}
-                    ¥{Math.round(parseFloat(tx.amount)).toLocaleString()}
-                  </td>
-                  <td className="td">
-                    <span className="badge bg-gray-100 text-gray-600">
-                      {tx.source_type === 'csv_statement' ? 'CSV' : tx.source_type === 'pdf_statement' ? 'PDF' : '手動'}
-                    </span>
-                  </td>
-                  <td className="td">
-                    <button
-                      onClick={() => setEditTx(tx)}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
-                    >
-                      <Pencil size={14} />
-                    </button>
+                <tr>
+                  <td colSpan={6} className="text-center py-12 text-sm" style={{ color: '#475569' }}>
+                    読み込み中...
                   </td>
                 </tr>
-              ))}
+              )}
+              {!isLoading && data?.items.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="text-center py-12 text-sm" style={{ color: '#475569' }}>
+                    取引が見つかりません
+                  </td>
+                </tr>
+              )}
+              {data?.items.map((tx) => {
+                const catColor = CATEGORY_COLORS[tx.category ?? 'other'] ?? '#2A2D42';
+                const isCredit = tx.direction === 'credit';
+                return (
+                  <tr
+                    key={tx.id}
+                    className={clsx('transition-colors', tx.is_ignored && 'opacity-40')}
+                    style={{ borderTop: '1px solid #1E2030' }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLElement).style.backgroundColor = '#161829';
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    <td className="px-4 py-3 text-sm whitespace-nowrap" style={{ color: '#64748B' }}>
+                      {formatDate(tx.transaction_date)}
+                    </td>
+                    <td
+                      className="px-4 py-3 text-sm font-medium whitespace-nowrap max-w-xs truncate"
+                      style={{ color: '#CBD5E1' }}
+                    >
+                      {tx.merchant_normalized ?? tx.merchant_raw}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                        style={{
+                          backgroundColor: catColor + '25',
+                          color: catColor,
+                          border: `1px solid ${catColor}50`,
+                        }}
+                      >
+                        {CATEGORY_LABELS[tx.category ?? 'other'] ?? tx.category}
+                      </span>
+                    </td>
+                    <td
+                      className="px-4 py-3 text-sm text-right font-semibold tabular-nums whitespace-nowrap"
+                      style={{ color: isCredit ? '#4ADE80' : '#F1F5F9' }}
+                    >
+                      {isCredit ? '+' : '-'}¥{Math.round(parseFloat(tx.amount)).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                        style={{ backgroundColor: '#1E2030', color: '#64748B' }}
+                      >
+                        {tx.source_type === 'csv_statement'
+                          ? 'CSV'
+                          : tx.source_type === 'pdf_statement'
+                          ? 'PDF'
+                          : '手動'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => setEditTx(tx)}
+                        className="p-1.5 rounded-lg transition-colors"
+                        style={{ color: '#475569' }}
+                        onMouseEnter={e => {
+                          (e.currentTarget as HTMLElement).style.backgroundColor = '#1E2030';
+                          (e.currentTarget as HTMLElement).style.color = '#7C6FFF';
+                        }}
+                        onMouseLeave={e => {
+                          (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                          (e.currentTarget as HTMLElement).style.color = '#475569';
+                        }}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
-        {/* ページネーション */}
+        {/* Pagination */}
         {data && data.total_pages > 1 && (
-          <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between text-sm text-gray-600">
-            <span>{data.total}件中 {(page - 1) * 50 + 1}〜{Math.min(page * 50, data.total)}件</span>
+          <div
+            className="px-4 py-3 flex items-center justify-between text-sm"
+            style={{ borderTop: '1px solid #1E2030', color: '#64748B' }}
+          >
+            <span>
+              {data.total}件中 {(page - 1) * 50 + 1}〜{Math.min(page * 50, data.total)}件
+            </span>
             <div className="flex gap-2">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="p-1.5 rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                className="p-1.5 rounded-lg transition-colors disabled:opacity-30"
+                style={{ border: '1px solid #2A2D42', color: '#64748B' }}
               >
                 <ChevronLeft size={16} />
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(data.total_pages, p + 1))}
                 disabled={page === data.total_pages}
-                className="p-1.5 rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                className="p-1.5 rounded-lg transition-colors disabled:opacity-30"
+                style={{ border: '1px solid #2A2D42', color: '#64748B' }}
               >
                 <ChevronRight size={16} />
               </button>
@@ -183,7 +268,7 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      {/* 編集モーダル */}
+      {/* Edit modal */}
       {editTx && (
         <EditModal
           tx={editTx}
@@ -195,7 +280,7 @@ export default function TransactionsPage() {
   );
 }
 
-// ---- インライン編集モーダル ----
+// ── Edit modal ──────────────────────────────────────────
 
 function EditModal({
   tx,
@@ -217,30 +302,60 @@ function EditModal({
     setSaving(false);
   };
 
+  const inputStyle = {
+    width: '100%',
+    padding: '8px 12px',
+    fontSize: 14,
+    borderRadius: 12,
+    border: '1px solid #2A2D42',
+    backgroundColor: '#0E0F1A',
+    color: '#CBD5E1',
+    outline: 'none',
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="card w-full max-w-md p-6 space-y-5">
+    <div
+      className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl p-6 space-y-5"
+        style={{ backgroundColor: '#13151F', border: '1px solid #2A2D42' }}
+      >
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-gray-800">取引を編集</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 p-1">✕</button>
+          <h3 className="text-base font-semibold" style={{ color: '#F1F5F9' }}>取引を編集</h3>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-colors"
+            style={{ color: '#64748B', backgroundColor: '#1E2030' }}
+          >
+            ✕
+          </button>
         </div>
 
-        {/* 情報 */}
-        <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-1">
-          <p className="font-medium text-gray-800">{tx.merchant_normalized ?? tx.merchant_raw}</p>
-          <p className="text-gray-500">{formatDate(tx.transaction_date)}</p>
-          <p className="text-lg font-bold text-gray-900 mt-1">
-            ¥{Math.round(parseFloat(tx.amount)).toLocaleString()}
+        {/* Transaction info */}
+        <div className="rounded-xl p-4 text-sm space-y-1" style={{ backgroundColor: '#0E0F1A' }}>
+          <p className="font-medium" style={{ color: '#CBD5E1' }}>
+            {tx.merchant_normalized ?? tx.merchant_raw}
+          </p>
+          <p style={{ color: '#64748B' }}>{formatDate(tx.transaction_date)}</p>
+          <p
+            className="text-lg font-bold mt-1"
+            style={{ color: tx.direction === 'credit' ? '#4ADE80' : '#F87171' }}
+          >
+            {tx.direction === 'credit' ? '+' : '-'}¥{Math.round(parseFloat(tx.amount)).toLocaleString()}
           </p>
         </div>
 
-        {/* カテゴリ */}
+        {/* Category */}
         <div>
-          <label className="text-xs font-medium text-gray-600 block mb-1.5">カテゴリ</label>
+          <label className="text-xs font-medium block mb-1.5" style={{ color: '#64748B' }}>
+            カテゴリ
+          </label>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+            style={inputStyle}
           >
             {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
@@ -248,30 +363,35 @@ function EditModal({
           </select>
         </div>
 
-        {/* メモ */}
+        {/* Notes */}
         <div>
-          <label className="text-xs font-medium text-gray-600 block mb-1.5">メモ</label>
+          <label className="text-xs font-medium block mb-1.5" style={{ color: '#64748B' }}>
+            メモ
+          </label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/30 resize-none"
+            style={{ ...inputStyle, resize: 'none' }}
             placeholder="メモを入力..."
           />
         </div>
 
-        {/* 無視フラグ */}
+        {/* Ignore toggle */}
         <label className="flex items-center gap-3 cursor-pointer">
           <input
             type="checkbox"
             checked={isIgnored}
             onChange={(e) => setIsIgnored(e.target.checked)}
-            className="w-4 h-4 rounded accent-brand-500"
+            className="w-4 h-4 rounded"
+            style={{ accentColor: '#7C6FFF' }}
           />
-          <span className="text-sm text-gray-600">この取引を無視する（集計から除外）</span>
+          <span className="text-sm" style={{ color: '#94A3B8' }}>
+            この取引を無視する（集計から除外）
+          </span>
         </label>
 
-        {/* ボタン */}
+        {/* Buttons */}
         <div className="flex gap-3 justify-end pt-1">
           <button onClick={onClose} className="btn-secondary">キャンセル</button>
           <button onClick={handleSubmit} disabled={saving} className="btn-primary">

@@ -8,14 +8,27 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        brand: {
-          50:  '#f0f4ff',
-          100: '#e0eaff',
-          500: '#4361ee',
-          600: '#3451d1',
-          700: '#2a40b8',
+        // Dark theme palette (Origin / Monarch style)
+        dark: {
+          bg:      '#0B0C14',   // page background
+          sidebar: '#0E0F1A',   // sidebar
+          card:    '#13151F',   // card background
+          border:  '#1E2030',   // card border
+          hover:   '#1A1C2A',   // hover state
+          muted:   '#1E2030',   // muted surface
         },
-        surface: '#f8f9fc',
+        brand: {
+          50:  '#ede9ff',
+          100: '#d5cfff',
+          400: '#9d8fff',
+          500: '#7C6FFF',       // primary accent
+          600: '#6455e0',
+          700: '#4e40c7',
+        },
+        // Semantic colors on dark
+        income:  '#4ADE80',     // green
+        expense: '#F87171',     // red
+        neutral: '#94A3B8',     // gray text
       },
       fontFamily: {
         sans: ['Inter', 'Noto Sans JP', 'sans-serif'],

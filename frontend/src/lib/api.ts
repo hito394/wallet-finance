@@ -153,6 +153,53 @@ export const CATEGORY_LABELS: Record<string, string> = {
   other:          'その他',
 };
 
+// ---- Plaid 銀行連携 ----
+
+export interface BankAccount {
+  id: string;
+  plaid_account_id: string;
+  name: string;
+  official_name: string | null;
+  account_type: string | null;
+  account_subtype: string | null;
+  mask: string | null;
+  currency: string;
+  current_balance: number | null;
+  available_balance: number | null;
+  last_synced_at: string | null;
+}
+
+export interface PlaidItem {
+  id: string;
+  institution_name: string;
+  institution_id: string | null;
+  last_synced_at: string | null;
+  accounts: BankAccount[];
+}
+
+export async function getPlaidLinkToken(): Promise<{ link_token: string; plaid_env: string }> {
+  return request('/api/plaid/link-token');
+}
+
+export async function exchangePlaidToken(public_token: string): Promise<{ item_id: string; institution_name: string }> {
+  return request('/api/plaid/exchange', {
+    method: 'POST',
+    body: JSON.stringify({ public_token }),
+  });
+}
+
+export async function getPlaidAccounts(): Promise<{ items: PlaidItem[] }> {
+  return request('/api/plaid/accounts');
+}
+
+export async function syncPlaidItem(item_id: string): Promise<{ added: number; modified: number; removed: number }> {
+  return request(`/api/plaid/sync/${item_id}`, { method: 'POST' });
+}
+
+export async function disconnectPlaidItem(item_id: string): Promise<void> {
+  await request(`/api/plaid/items/${item_id}`, { method: 'DELETE' });
+}
+
 export const CATEGORY_COLORS: Record<string, string> = {
   food_dining:    '#FF6B6B',
   grocery:        '#FF8C42',

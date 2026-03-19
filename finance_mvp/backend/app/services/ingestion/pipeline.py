@@ -19,6 +19,7 @@ from app.services.matching.receipt_transaction_matcher import match_receipt_to_t
 from app.services.matching.document_cross_validator import cross_validate_document_with_transactions
 from app.services.normalization.merchant_normalizer import normalize_merchant
 from app.services.parsers.csv_statement_parser import parse_csv_statement
+from app.services.parsers.ofx_parser import parse_ofx_statement
 from app.services.parsers.pdf_statement_parser import parse_pdf_statement_with_diagnostics
 from app.services.parsers.receipt_ocr import extract_text, parse_receipt
 from app.utils.fingerprint import transaction_fingerprint
@@ -80,7 +81,7 @@ def process_import(
         document_text = ""
         if suffix in {".pdf", ".png", ".jpg", ".jpeg", ".webp"}:
             document_text = extract_text(local_file_path)
-        elif suffix == ".csv":
+        elif suffix in {".csv", ".ofx", ".qfx"}:
             document_text = f"statement file {job.file_name}"
 
         source_hint = job.source_type.value if job.source_type else None
@@ -234,6 +235,10 @@ def process_import(
                     and statement_diagnostics.detail_section_hits == 0
                 )
                 suspicious_account_number_rows = statement_diagnostics.suspicious_account_number_rows
+            elif suffix in {".ofx", ".qfx"}:
+                parser_name = "ofx_parser"
+                parsed_transactions = parse_ofx_statement(local_file_path)
+                parser_confidence = 0.9 if parsed_transactions else 0.1
             else:
                 parser_name = "unknown"
                 parsed_transactions = []
