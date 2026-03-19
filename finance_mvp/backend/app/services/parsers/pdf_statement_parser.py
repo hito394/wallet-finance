@@ -111,6 +111,34 @@ class StatementParseDiagnostics:
     suspicious_account_number_rows: int = 0
 
 
+def _dedupe_scored_rows(scored_rows: list[tuple[int, ParsedTransaction]]) -> list[ParsedTransaction]:
+    parsed: list[ParsedTransaction] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for _, tx in scored_rows:
+        key = (
+            tx.transaction_date.isoformat(),
+            tx.description,
+            str(tx.amount),
+            tx.direction,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        parsed.append(tx)
+    return parsed
+
+
+def _set_parser_confidence(parsed: list[ParsedTransaction], diagnostics: StatementParseDiagnostics) -> None:
+    if not parsed:
+        diagnostics.parser_confidence = 0.15 if diagnostics.summary_section_hits > 0 else 0.05
+    elif diagnostics.detail_section_hits > 0:
+        diagnostics.parser_confidence = 0.92
+    elif diagnostics.suspicious_account_number_rows > 0:
+        diagnostics.parser_confidence = 0.55
+    else:
+        diagnostics.parser_confidence = 0.75
+
+
 def _try_parse_date(raw: str):
     try:
         return date_parser.parse(raw, dayfirst=False).date()
@@ -422,28 +450,74 @@ def parse_pdf_statement_with_diagnostics(
     except Exception:
         return [], StatementParseDiagnostics(issuer="unknown")
 
-    parsed: list[ParsedTransaction] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for _, tx in scored_rows:
-        key = (
-            tx.transaction_date.isoformat(),
-            tx.description,
-            str(tx.amount),
-            tx.direction,
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        parsed.append(tx)
+    parsed = _dedupe_scored_rows(scored_rows)
+    _set_parser_confidence(parsed, diagnostics)
 
-    if not parsed:
-        diagnostics.parser_confidence = 0.15 if diagnostics.summary_section_hits > 0 else 0.05
-    elif diagnostics.detail_section_hits > 0:
-        diagnostics.parser_confidence = 0.92
-    elif diagnostics.suspicious_account_number_rows > 0:
-        diagnostics.parser_confidence = 0.55
-    else:
-        diagnostics.parser_confidence = 0.75
+    return parsed, diagnostics
+
+
+def parse_statement_text_with_diagnostics(
+    text: str,
+    source: str,
+) -> tuple[list[ParsedTransaction], StatementParseDiagnostics]:
+    issuer = _detect_issuer(text)
+    diagnostics = StatementParseDiagnostics(issuer=issuer)
+    scored_rows: list[tuple[int, ParsedTransaction]] = []
+
+    in_detail_section = False
+    in_summary_section = False
+    section_direction: str | None = None
+
+    for raw_line in text.splitlines():
+        line = re.sub(r"\s+", " ", (raw_line or "").strip())
+        if not line:
+            continue
+
+        if _has_section_title(line, DETAIL_SECTION_TITLES):
+            diagnostics.detail_section_hits += 1
+            in_detail_section = True
+            in_summary_section = False
+            if _has_section_title(line, CREDIT_SECTION_TITLES):
+                section_direction = "credit"
+            elif _has_section_title(line, DEBIT_SECTION_TITLES):
+                section_direction = "debit"
+            else:
+                section_direction = None
+            continue
+
+        if _has_section_title(line, SUMMARY_SECTION_TITLES):
+            diagnostics.summary_section_hits += 1
+            in_summary_section = True
+            in_detail_section = False
+            section_direction = None
+            continue
+
+        if ACCOUNT_NUMBER_PATTERN.search(line):
+            diagnostics.suspicious_account_number_rows += 1
+
+        tx = _parse_transaction_line(
+            line,
+            source=source,
+            diagnostics=diagnostics,
+            section_direction=section_direction,
+        )
+        if tx is None:
+            continue
+
+        score = 1
+        if in_detail_section:
+            score += 2
+        if in_summary_section:
+            score -= 2
+        if issuer == "chase" and tx.posted_date is not None:
+            score += 1
+
+        if score >= 1:
+            diagnostics.matched_rows += 1
+            scored_rows.append((score, tx))
+
+    parsed = _dedupe_scored_rows(scored_rows)
+    _set_parser_confidence(parsed, diagnostics)
 
     return parsed, diagnostics
 

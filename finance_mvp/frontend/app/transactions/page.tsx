@@ -2,7 +2,7 @@ import EntitySwitcher from "@/components/entity-switcher";
 import PageHeader from "@/components/page-header";
 import StatusMessage from "@/components/status-message";
 import TransactionsTable from "@/components/transactions-table";
-import { fetchEntities, fetchTransactions } from "@/lib/api";
+import { fetchEntities, fetchTransactionCategories, fetchTransactions } from "@/lib/api";
 
 type Props = {
   searchParams?: Promise<{ entityId?: string; year?: string; month?: string }>;
@@ -17,11 +17,18 @@ export default async function TransactionsPage({ searchParams }: Props) {
   const entities = entitiesResult.data || [];
   const selectedEntityId = params.entityId || entities[0]?.id;
 
-  const transactionsResult = selectedEntityId
-    ? await fetchTransactions(selectedEntityId, year, month)
-    : { data: [], error: "No entity selected", status: null };
+  const [transactionsResult, categoriesResult] = selectedEntityId
+    ? await Promise.all([
+        fetchTransactions(selectedEntityId, year, month),
+        fetchTransactionCategories(selectedEntityId),
+      ])
+    : [
+        { data: [], error: "No entity selected", status: null },
+        { data: [], error: "No entity selected", status: null },
+      ];
 
   const rows = transactionsResult.data || [];
+  const categories = categoriesResult.data || [];
 
   return (
     <div>
@@ -59,8 +66,11 @@ export default async function TransactionsPage({ searchParams }: Props) {
       {transactionsResult.error && (
         <StatusMessage tone="error" title="Unable to load transactions" detail={transactionsResult.error} />
       )}
+      {categoriesResult.error && (
+        <StatusMessage tone="warn" title="Unable to load categories" detail={categoriesResult.error} />
+      )}
 
-      <TransactionsTable rows={rows} />
+      <TransactionsTable rows={rows} categories={categories} entityId={selectedEntityId} />
     </div>
   );
 }

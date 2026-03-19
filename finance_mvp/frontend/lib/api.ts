@@ -61,6 +61,19 @@ export type TransactionItem = {
   created_at: string;
 };
 
+export type TransactionCategoryOption = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+export type TransactionUpdatePayload = {
+  category_id?: string | null;
+  notes?: string | null;
+  is_ignored?: boolean;
+  receipt_id?: string | null;
+};
+
 export type DocumentItem = {
   id: string;
   entity_id: string;
@@ -226,6 +239,26 @@ export async function fetchTransactions(entityId?: string, year?: number, month?
   if (month) params.set("month", String(month));
   const query = params.toString() ? `?${params.toString()}` : "";
   return requestJson<TransactionItem[]>(`/transactions${query}`, undefined, { entityId });
+}
+
+export async function fetchTransactionCategories(entityId?: string): Promise<ApiResult<TransactionCategoryOption[]>> {
+  return requestJson<TransactionCategoryOption[]>("/transactions/categories", undefined, { entityId });
+}
+
+export async function updateTransaction(
+  transactionId: string,
+  payload: TransactionUpdatePayload,
+  entityId?: string,
+): Promise<ApiResult<TransactionItem>> {
+  return requestJson<TransactionItem>(
+    `/transactions/${encodeURIComponent(transactionId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    { entityId },
+  );
 }
 
 export async function reclassifyTransactions(entityId?: string): Promise<ApiResult<{ updated_categories: number; newly_ignored_rows: number; scanned_rows: number }>> {

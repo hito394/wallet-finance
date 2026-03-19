@@ -20,7 +20,10 @@ from app.services.matching.document_cross_validator import cross_validate_docume
 from app.services.normalization.merchant_normalizer import normalize_merchant
 from app.services.parsers.csv_statement_parser import parse_csv_statement
 from app.services.parsers.ofx_parser import parse_ofx_statement
-from app.services.parsers.pdf_statement_parser import parse_pdf_statement_with_diagnostics
+from app.services.parsers.pdf_statement_parser import (
+    parse_pdf_statement_with_diagnostics,
+    parse_statement_text_with_diagnostics,
+)
 from app.services.parsers.receipt_ocr import extract_text, parse_receipt
 from app.utils.fingerprint import transaction_fingerprint
 
@@ -229,6 +232,17 @@ def process_import(
                     local_file_path,
                     source=source,
                 )
+                # Fallback: some statement PDFs have a text layer that is valid,
+                # but table word coordinates are too noisy for layout extraction.
+                if not parsed_transactions and (document.raw_text or "").strip():
+                    fallback_transactions, fallback_diagnostics = parse_statement_text_with_diagnostics(
+                        document.raw_text,
+                        source=source,
+                    )
+                    if fallback_transactions:
+                        parsed_transactions = fallback_transactions
+                        statement_diagnostics = fallback_diagnostics
+                        parser_name = "pdf_statement_parser_raw_text_fallback"
                 parser_confidence = statement_diagnostics.parser_confidence
                 summary_without_detail = (
                     statement_diagnostics.summary_section_hits > 0

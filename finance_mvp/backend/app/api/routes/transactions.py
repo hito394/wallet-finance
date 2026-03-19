@@ -6,7 +6,12 @@ from app.db.session import get_db
 from app.models.category import Category
 from app.models.learning_feedback import FeedbackType, LearningFeedback
 from app.models.transaction import Transaction
-from app.schemas.transaction import ReclassifyTransactionsResponse, TransactionRead, TransactionUpdate
+from app.schemas.transaction import (
+    ReclassifyTransactionsResponse,
+    TransactionCategoryRead,
+    TransactionRead,
+    TransactionUpdate,
+)
 from app.services.categorization.engine import categorize_transaction
 from app.services.normalization.merchant_normalizer import normalize_merchant
 from app.utils.user_context import resolve_actor_context
@@ -54,6 +59,21 @@ def list_transactions(
 
     query = query.order_by(Transaction.transaction_date.desc())
     return list(db.scalars(query).all())
+
+
+@router.get("/categories", response_model=list[TransactionCategoryRead])
+def list_transaction_categories(
+    x_user_id: str | None = Header(default=None),
+    x_entity_id: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> list[TransactionCategoryRead]:
+    _, entity = resolve_actor_context(db, x_user_id, x_entity_id)
+    rows = db.scalars(
+        select(Category)
+        .where(Category.entity_id == entity.id)
+        .order_by(Category.name.asc())
+    ).all()
+    return list(rows)
 
 
 @router.patch("/{transaction_id}", response_model=TransactionRead)
