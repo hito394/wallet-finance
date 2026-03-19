@@ -260,7 +260,12 @@ def process_import(
             extracted_amount_total = Decimal("0")
             for item in parsed_transactions:
                 merchant_normalized = normalize_merchant(item.merchant_raw)
-                category_result = categorize_transaction(item.merchant_raw, item.description)
+                category_result = categorize_transaction(
+                    item.merchant_raw,
+                    item.description,
+                    direction=item.direction,
+                    source=item.source,
+                )
                 category = _get_or_create_category(db, job.entity_id, category_result.category)
                 fingerprint = transaction_fingerprint(
                     item.transaction_date,
@@ -270,7 +275,16 @@ def process_import(
                     item.source,
                 )
 
-                duplicate = find_duplicate_by_fingerprint(db, job.entity_id, fingerprint)
+                duplicate = None
+                if item.external_txn_id:
+                    duplicate = db.scalar(
+                        select(Transaction).where(
+                            Transaction.entity_id == job.entity_id,
+                            Transaction.external_txn_id == item.external_txn_id,
+                        )
+                    )
+                if duplicate is None:
+                    duplicate = find_duplicate_by_fingerprint(db, job.entity_id, fingerprint)
                 if duplicate:
                     if duplicate.import_id == job.id:
                         same_import_existing_count += 1

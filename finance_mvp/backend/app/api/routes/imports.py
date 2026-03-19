@@ -1,5 +1,5 @@
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -74,16 +74,14 @@ def upload_import(
     destination = settings.file_storage_root / f"{uuid4()}_{safe_name}"
     file_hash = _persist_upload_and_hash(file, destination)
 
-    # Idempotency guard: same entity + source_type + content hash within 10 min
-    # reuses the existing import job to avoid duplicate document rows.
-    duplicate_window = datetime.utcnow() - timedelta(minutes=10)
+    # Idempotency guard: same entity + source_type + content hash reuses the
+    # existing import job to avoid duplicate document/transaction rows.
     existing = db.scalar(
         select(ImportJob)
         .where(
             ImportJob.entity_id == entity.id,
             ImportJob.source_type == source_type,
             ImportJob.file_hash == file_hash,
-            ImportJob.created_at >= duplicate_window,
         )
         .order_by(ImportJob.created_at.desc())
     )

@@ -13,6 +13,8 @@ AMOUNT_CANDIDATES = ["amount", "transaction_amount", "value"]
 DEBIT_CANDIDATES = ["debit", "withdrawal", "payment", "charges"]
 CREDIT_CANDIDATES = ["credit", "deposit", "addition", "refund"]
 BALANCE_CANDIDATES = ["balance", "running_balance", "account_balance"]
+_CREDIT_HINTS = ("salary", "payroll", "deposit", "refund", "interest", "income", "入金", "給与")
+_DEBIT_HINTS = ("purchase", "debit", "withdraw", "fee", "charge", "payment", "atm", "出金", "引落")
 
 
 def _pick_column(columns: list[str], candidates: list[str]) -> str | None:
@@ -38,6 +40,15 @@ def _to_decimal(value) -> Decimal | None:
     except Exception:
         return None
     return -abs(amount) if negative else amount
+
+
+def _infer_direction_from_text(description: str, default_direction: str) -> str:
+    text = (description or "").lower()
+    if any(keyword in text for keyword in _CREDIT_HINTS):
+        return "credit"
+    if any(keyword in text for keyword in _DEBIT_HINTS):
+        return "debit"
+    return default_direction
 
 
 def parse_csv_statement(file_path: str, source: str) -> list[ParsedTransaction]:
@@ -70,7 +81,10 @@ def parse_csv_statement(file_path: str, source: str) -> list[ParsedTransaction]:
             amount_value = _to_decimal(row[amount_col])
             if amount_value is None:
                 continue
-            direction = "debit" if amount_value > 0 else "credit"
+            if source == "bank":
+                direction = "debit"
+            else:
+                direction = "debit" if amount_value > 0 else "credit"
         else:
             debit_value = _to_decimal(row[debit_col]) if debit_col else None
             credit_value = _to_decimal(row[credit_col]) if credit_col else None
@@ -94,12 +108,15 @@ def parse_csv_statement(file_path: str, source: str) -> list[ParsedTransaction]:
         except Exception:
             continue
 
+        description = str(row[desc_col]).strip()
+        direction = _infer_direction_from_text(description, direction)
+
         results.append(
             ParsedTransaction(
                 transaction_date=transaction_date,
                 posted_date=None,
-                merchant_raw=str(row[desc_col]).strip(),
-                description=str(row[desc_col]).strip(),
+                merchant_raw=description,
+                description=description,
                 amount=abs(amount),
                 direction=direction,
                 currency="USD",

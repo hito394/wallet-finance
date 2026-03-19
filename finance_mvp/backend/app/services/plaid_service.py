@@ -267,6 +267,8 @@ def _upsert_plaid_transaction(db: Session, tx_data: dict, item: PlaidItem, entit
     cat_result = categorize_transaction(
         merchant_raw=merchant_norm,
         description=description,
+        direction=direction.value,
+        source="bank",
     )
     cat_slug = cat_result.category.lower().replace(" ", "-")
     db_category = db.scalar(select(Category).where(

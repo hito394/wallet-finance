@@ -71,6 +71,33 @@ SUMMARY_LINE_KEYWORDS = {
 
 ACCOUNT_NUMBER_PATTERN = re.compile(r"\b(?:acct|account)\b.*\b\d{4,}\b", re.IGNORECASE)
 ACCOUNT_LIKE_FRAGMENT_PATTERN = re.compile(r"^[#*xX\-\s\d]{6,}$")
+_CREDIT_HINTS = (
+    "salary",
+    "payroll",
+    "deposit",
+    "refund",
+    "interest",
+    "direct dep",
+    "ach credit",
+    "transfer in",
+    "zelle credit",
+    "入金",
+    "給与",
+)
+_DEBIT_HINTS = (
+    "withdraw",
+    "debit",
+    "purchase",
+    "charge",
+    "fee",
+    "payment",
+    "transfer out",
+    "ach debit",
+    "atm",
+    "zelle debit",
+    "引落",
+    "出金",
+)
 
 
 @dataclass
@@ -210,19 +237,6 @@ def _parse_transaction_line(
             if parsed_balance:
                 running_balance = parsed_balance[0]
 
-    # Determine transaction direction:
-    # 1. If we know the section type (deposits vs withdrawals), trust that first.
-    # 2. For bank statements with signed amounts: negative = outgoing (debit/expense),
-    #    positive = incoming (credit/income).  This is the opposite of the raw credit-card
-    #    convention used inside _parse_amount_token.
-    # 3. For credit cards: keep raw convention (negative/CR → credit, positive → debit).
-    if section_direction is not None:
-        direction = section_direction
-    elif source == "bank":
-        direction = "debit" if is_negative else "credit"
-    else:
-        direction = raw_direction
-
     description = re.sub(r"\s+", " ", rest[: amount_match.start()].strip(" -\t"))
     if len(description) < 3:
         return None
@@ -230,6 +244,27 @@ def _parse_transaction_line(
     if _looks_like_account_number_fragment(description):
         diagnostics.suspicious_account_number_rows += 1
         return None
+
+    lower_desc = description.lower()
+    # Determine transaction direction:
+    # 1) Section context is strongest when available.
+    # 2) Description hints override ambiguous numeric sign conventions.
+    # 3) Bank default is debit (spend) for unsigned rows; card follows raw sign/CR.
+    if section_direction is not None:
+        direction = section_direction
+    elif any(hint in lower_desc for hint in _CREDIT_HINTS):
+        direction = "credit"
+    elif any(hint in lower_desc for hint in _DEBIT_HINTS):
+        direction = "debit"
+    elif source == "bank":
+        if is_negative:
+            direction = "debit"
+        elif raw_direction == "credit":
+            direction = "credit"
+        else:
+            direction = "debit"
+    else:
+        direction = raw_direction
 
     return ParsedTransaction(
         transaction_date=tx_date,
