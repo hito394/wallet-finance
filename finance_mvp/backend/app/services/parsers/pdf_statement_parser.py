@@ -451,6 +451,10 @@ def parse_pdf_statement_with_diagnostics(
         return [], StatementParseDiagnostics(issuer="unknown")
 
     parsed = _dedupe_scored_rows(scored_rows)
+    if not parsed and issuer_text.strip():
+        fallback_parsed, fallback_diagnostics = parse_statement_text_with_diagnostics(issuer_text, source)
+        if fallback_parsed:
+            return fallback_parsed, fallback_diagnostics
     _set_parser_confidence(parsed, diagnostics)
 
     return parsed, diagnostics

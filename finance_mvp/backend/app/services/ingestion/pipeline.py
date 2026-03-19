@@ -81,18 +81,27 @@ def process_import(
         file_path = Path(local_file_path)
         suffix = file_path.suffix.lower()
 
+        existing_document = db.scalar(
+            select(FinancialDocument).where(FinancialDocument.import_id == job.id)
+        )
+        preserved_raw_text = (
+            existing_document.raw_text if existing_document and existing_document.raw_text else ""
+        )
+
         document_text = ""
         if suffix in {".pdf", ".png", ".jpg", ".jpeg", ".webp"}:
             document_text = extract_text(local_file_path)
         elif suffix in {".csv", ".ofx", ".qfx"}:
             document_text = f"statement file {job.file_name}"
 
+        # Reparse may happen after a restart where the original uploaded file is
+        # no longer available on ephemeral disk. Keep prior extracted text so
+        # statement parsing still has data to work with.
+        if not document_text and preserved_raw_text:
+            document_text = preserved_raw_text
+
         source_hint = job.source_type.value if job.source_type else None
         intelligence = analyze_financial_document(document_text, job.file_name, source_type_hint=source_hint)
-
-        existing_document = db.scalar(
-            select(FinancialDocument).where(FinancialDocument.import_id == job.id)
-        )
 
         if existing_document and not force_reprocess and existing_document.parsing_status in {
             "parsed",
@@ -125,7 +134,7 @@ def process_import(
             document.reimbursable_candidate = intelligence.reimbursable_candidate
             document.tax_relevant_candidate = intelligence.tax_relevant_candidate
             document.retention_recommended = intelligence.retention_recommended
-            document.merchant_name = intelligence.merchant_name
+            document.merchant_name = intelligence.merchant_name or document.merchant_name
             document.merchant_address = intelligence.merchant_address
             document.purchase_date = intelligence.purchase_date
             document.invoice_date = intelligence.invoice_date
@@ -138,11 +147,18 @@ def process_import(
             document.invoice_number = intelligence.invoice_number
             document.order_number = intelligence.order_number
             document.line_items = intelligence.line_items
-            document.raw_text = intelligence.raw_text
-            document.extraction_confidence = intelligence.extraction_confidence
-            document.likely_issuer = intelligence.likely_issuer
-            document.source_type_hint = intelligence.source_type_hint
-            document.raw_text_preview = intelligence.raw_text_preview
+            if intelligence.raw_text:
+                document.raw_text = intelligence.raw_text
+            document.extraction_confidence = max(
+                document.extraction_confidence or 0.0,
+                intelligence.extraction_confidence or 0.0,
+            )
+            document.likely_issuer = intelligence.likely_issuer or document.likely_issuer
+            document.source_type_hint = intelligence.source_type_hint or document.source_type_hint
+            if intelligence.raw_text_preview:
+                document.raw_text_preview = intelligence.raw_text_preview
+            elif document.raw_text:
+                document.raw_text_preview = document.raw_text[:4000]
             document.parsing_status = "pending"
             document.parsing_failure_reason = None
             document.review_required = False
