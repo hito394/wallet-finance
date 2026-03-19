@@ -54,13 +54,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         <nav className="topnav">
           {NAV_ITEMS.map((item) => (
-            <Link
+            <a
               key={item.href}
               href={item.href}
               className={`topnav-link ${isActive(pathname, item.href) ? "active" : ""}`}
             >
               {item.label}
-            </Link>
+            </a>
           ))}
         </nav>
       </header>
@@ -68,14 +68,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {open && (
         <nav className="mobile-nav">
           {NAV_ITEMS.map((item) => (
-            <Link
+            <a
               key={item.href}
               href={item.href}
               className={`mobile-nav-link ${isActive(pathname, item.href) ? "active" : ""}`}
               onClick={() => setOpen(false)}
             >
               {item.label}
-            </Link>
+            </a>
           ))}
         </nav>
       )}

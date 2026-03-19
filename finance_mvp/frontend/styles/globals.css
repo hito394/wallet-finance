@@ -65,7 +65,7 @@ a {
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 2000;
+  z-index: 2147483647;
   isolation: isolate;
   display: flex;
   align-items: center;
@@ -80,6 +80,14 @@ a {
 .topbar,
 .topbar * {
   pointer-events: auto;
+}
+
+.topnav,
+.topnav-link,
+.mobile-nav,
+.mobile-nav-link {
+  position: relative;
+  z-index: 2147483647;
 }
 
 .topbar-left {
