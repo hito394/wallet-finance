@@ -15,5 +15,5 @@ python-dateutil==2.9.0.post0
 scikit-learn==1.6.1
 numpy==2.2.3
 psycopg2-binary==2.9.9
-plaid-python==27.2.0
+plaid-python==27.0.0
 ofxparse==0.21
