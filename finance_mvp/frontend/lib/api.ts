@@ -132,6 +132,7 @@ export type ImportJob = {
   source_type: ImportSourceType;
   status: "pending" | "processing" | "completed" | "failed";
   file_name: string;
+  metadata_json?: Record<string, unknown>;
   error_message: string | null;
   created_at: string;
   processed_at: string | null;

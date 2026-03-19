@@ -233,6 +233,21 @@ def upload_import(
         .order_by(ImportJob.created_at.desc())
     )
     if existing and existing.status in {ImportStatus.pending, ImportStatus.processing, ImportStatus.completed}:
+        # Best-effort cleanup: this request uploaded a duplicate payload, so we
+        # can discard the newly written temporary file.
+        try:
+            destination.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+        existing.metadata_json = {
+            **(existing.metadata_json or {}),
+            "idempotent_reuse": True,
+            "reused_upload_file_name": safe_name,
+        }
+        db.add(existing)
+        db.commit()
+        db.refresh(existing)
         return existing
 
     job = ImportJob(

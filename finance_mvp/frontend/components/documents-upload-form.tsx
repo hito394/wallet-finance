@@ -45,6 +45,7 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
   const [sourceType, setSourceType] = useState<UploadSourceSelection>("auto");
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [processedDoc, setProcessedDoc] = useState<DocumentItem | null>(null);
 
   const canSubmit = useMemo(() => !!file && !isUploading, [file, isUploading]);
@@ -82,6 +83,7 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
               setFile(event.target.files?.[0] || null);
               setProcessedDoc(null);
               setError(null);
+              setInfo(null);
             }}
             accept=".pdf,.csv,.png,.jpg,.jpeg,.webp,.ofx,.qfx"
           />
@@ -97,6 +99,7 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
             if (!file) return;
             setIsUploading(true);
             setError(null);
+            setInfo(null);
             setProcessedDoc(null);
 
             // Step 1: upload → get import job ID
@@ -105,6 +108,16 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
               setIsUploading(false);
               setError(uploadResult.error || "Upload failed");
               return;
+            }
+
+            const reused = uploadResult.data.metadata_json?.idempotent_reuse === true;
+            if (reused) {
+              const originalName = uploadResult.data.file_name;
+              setInfo(
+                originalName && originalName !== file.name
+                  ? `Duplicate content detected. Reused existing upload: ${originalName}.`
+                  : "Duplicate content detected. Reused existing upload result.",
+              );
             }
 
             const jobId = uploadResult.data.id;
@@ -134,6 +147,10 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
 
       {error && (
         <StatusMessage tone="error" title="Upload failed" detail={error} />
+      )}
+
+      {info && (
+        <StatusMessage tone="info" title="Upload reused existing result" detail={info} />
       )}
 
       {processedDoc && (
