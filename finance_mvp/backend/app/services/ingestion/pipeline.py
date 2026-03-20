@@ -13,7 +13,7 @@ from app.models.review_queue import ReviewQueueItem
 from app.models.transaction import Transaction
 from app.services.analytics.review_queue_rules import derive_review_reason
 from app.services.categorization.engine import categorize_transaction
-from app.services.dedupe.duplicate_detector import find_duplicate_by_fingerprint
+from app.services.dedupe.duplicate_detector import find_duplicate_by_fingerprint, find_duplicate_by_cross_source
 from app.services.document_intelligence.pipeline import analyze_financial_document
 from app.services.matching.receipt_transaction_matcher import match_receipt_to_transactions
 from app.services.matching.document_cross_validator import cross_validate_document_with_transactions
@@ -315,6 +315,15 @@ def process_import(
                     )
                 if duplicate is None:
                     duplicate = find_duplicate_by_fingerprint(db, job.entity_id, fingerprint)
+                if duplicate is None:
+                    duplicate = find_duplicate_by_cross_source(
+                        db,
+                        job.entity_id,
+                        item.transaction_date,
+                        item.amount,
+                        item.source,
+                        item.description,
+                    )
                 if duplicate:
                     if duplicate.import_id == job.id:
                         same_import_existing_count += 1
