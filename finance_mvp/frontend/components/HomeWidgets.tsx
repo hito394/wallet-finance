@@ -37,6 +37,8 @@ function KpiCard({ label, value, sub, icon, variant }: { label: string; value: s
 // ─── Widget config ────────────────────────────────────────────────────────────
 
 const KPI_IDS = new Set(["card_spend", "card_income", "card_net", "card_subs", "card_docs", "card_queue"]);
+// Widgets that can be resized (non-KPI)
+const RESIZABLE_IDS = new Set(["alerts", "trend", "pie", "recent"]);
 
 const DEFAULT_ORDER = [
   "card_spend", "card_income", "card_net", "card_subs", "card_docs", "card_queue",
@@ -56,19 +58,31 @@ const WIDGET_LABELS: Record<string, string> = {
   recent:      "Recent Transactions",
 };
 
-const STORAGE_KEY = "home_widget_config_v3";
+const STORAGE_KEY = "home_widget_config_v4";
 
-type WidgetConfig = { order: string[]; hidden: string[] };
+type WidgetSize = "full" | "half";
+type WidgetConfig = {
+  order: string[];
+  hidden: string[];
+  sizes: Record<string, WidgetSize>;
+};
+
+const DEFAULT_SIZES: Record<string, WidgetSize> = {
+  trend: "half",
+  pie:   "half",
+};
 
 function loadConfig(): WidgetConfig {
   try {
     const raw = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
     if (raw) {
       const p = JSON.parse(raw) as WidgetConfig;
-      if (Array.isArray(p.order) && Array.isArray(p.hidden)) return p;
+      if (Array.isArray(p.order) && Array.isArray(p.hidden)) {
+        return { sizes: {}, ...p };
+      }
     }
   } catch { /* ignore */ }
-  return { order: DEFAULT_ORDER, hidden: [] };
+  return { order: DEFAULT_ORDER, hidden: [], sizes: DEFAULT_SIZES };
 }
 
 function saveConfig(cfg: WidgetConfig) {
@@ -90,7 +104,7 @@ interface Props {
 
 export default function HomeWidgets({ overview, transactions, history, selectedMonth, entityId, docsRequiringReview, openReviewQueue, alerts }: Props) {
   const [mounted, setMounted] = useState(false);
-  const [config, setConfig] = useState<WidgetConfig>({ order: DEFAULT_ORDER, hidden: [] });
+  const [config, setConfig] = useState<WidgetConfig>({ order: DEFAULT_ORDER, hidden: [], sizes: DEFAULT_SIZES });
   const [editMode, setEditMode] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
@@ -111,6 +125,12 @@ export default function HomeWidgets({ overview, transactions, history, selectedM
       ? config.hidden.filter((h) => h !== id)
       : [...config.hidden, id];
     update({ ...config, hidden });
+  };
+
+  const cycleSize = (id: string) => {
+    const current = config.sizes[id] ?? "full";
+    const next: WidgetSize = current === "full" ? "half" : "full";
+    update({ ...config, sizes: { ...config.sizes, [id]: next } });
   };
 
   const order = [
@@ -151,13 +171,13 @@ export default function HomeWidgets({ overview, transactions, history, selectedM
     dragItemId.current = null;
   };
 
-  // ── Build individual KPI card ──
+  // ── KPI card renderers ──
   const fmt = (v: number) => `$${v.toLocaleString(undefined, { minimumFractionDigits: 0 })}`;
   const spend  = asNumber(overview?.total_spend);
   const income = asNumber(overview?.income);
   const net    = asNumber(overview?.net);
   const subs   = overview?.detected_subscriptions.length ?? 0;
-  const dupCount = (overview as any)?.duplicate_transaction_count ?? 0;
+  const dupCount = overview?.duplicate_transaction_count ?? 0;
 
   function renderKpiCard(id: string) {
     switch (id) {
@@ -178,7 +198,6 @@ export default function HomeWidgets({ overview, transactions, history, selectedM
     }
   }
 
-  // ── Render a non-KPI widget ──
   function renderWidget(id: string) {
     switch (id) {
       case "alerts": {
@@ -211,66 +230,59 @@ export default function HomeWidgets({ overview, transactions, history, selectedM
     }
   }
 
-  // ── Build widget list: group consecutive visible KPI cards into a grid row ──
-  function buildWidgets(activeOrder: string[], hidden: string[]) {
-    const elements: React.ReactNode[] = [];
-    let kpiBuffer: string[] = [];
+  // ─── Normal-mode layout: group KPI cards in a row, pair half-size widgets ───
+
+  type LayoutRow =
+    | { type: "kpi"; ids: string[] }
+    | { type: "pair"; a: string; b: string }
+    | { type: "single"; id: string };
+
+  function buildLayout(activeOrder: string[], hidden: string[]): LayoutRow[] {
+    const rows: LayoutRow[] = [];
+    let kpiBuf: string[] = [];
+    let halfBuf: string | null = null;
 
     function flushKpi() {
-      if (kpiBuffer.length === 0) return;
-      const buf = [...kpiBuffer];
-      kpiBuffer = [];
-      elements.push(
-        <div key={`kpi-row-${buf.join("-")}`} style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-          {buf.map((id) => <div key={id}>{renderKpiCard(id)}</div>)}
-        </div>
-      );
+      if (!kpiBuf.length) return;
+      rows.push({ type: "kpi", ids: [...kpiBuf] });
+      kpiBuf = [];
+    }
+
+    function flushHalf() {
+      if (!halfBuf) return;
+      rows.push({ type: "single", id: halfBuf });
+      halfBuf = null;
     }
 
     for (const id of activeOrder) {
-      const isHidden = hidden.includes(id);
-      if (!editMode && isHidden) {
-        // If we hit a non-KPI hidden widget, flush KPI buffer first
-        if (!KPI_IDS.has(id)) flushKpi();
+      if (hidden.includes(id)) continue;
+      if (KPI_IDS.has(id)) {
+        flushHalf();
+        kpiBuf.push(id);
         continue;
       }
-
-      if (KPI_IDS.has(id)) {
-        kpiBuffer.push(id);
-      } else {
-        flushKpi();
-        const content = renderWidget(id);
-        if (content) {
-          elements.push(
-            <WidgetWrapper
-              key={id}
-              id={id}
-              isHidden={isHidden}
-              isDragging={draggingId === id}
-              isDropTarget={overIdx === activeOrder.indexOf(id) && draggingId !== id}
-              editMode={editMode}
-              label={WIDGET_LABELS[id] ?? id}
-              onToggleHidden={toggleHidden}
-              onDragStart={onDragStart}
-              onDragOver={onDragOver}
-              onDrop={onDrop}
-              onDragEnd={onDragEnd}
-              idx={activeOrder.indexOf(id)}
-            >
-              {isHidden ? (
-                <div style={{ minHeight: 52, border: "2px dashed #e2e8f0", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", fontSize: 13, background: "#f8fafc" }}>
-                  {WIDGET_LABELS[id] ?? id} — hidden
-                </div>
-              ) : content}
-            </WidgetWrapper>
-          );
+      flushKpi();
+      const content = renderWidget(id);
+      if (!content) continue;
+      const size = config.sizes[id] ?? "full";
+      if (size === "half") {
+        if (halfBuf) {
+          rows.push({ type: "pair", a: halfBuf, b: id });
+          halfBuf = null;
+        } else {
+          halfBuf = id;
         }
+      } else {
+        flushHalf();
+        rows.push({ type: "single", id });
       }
     }
     flushKpi();
-    return elements;
+    flushHalf();
+    return rows;
   }
 
+  // ─── SSR fallback ─────────────────────────────────────────────────────────
   if (!mounted) {
     return (
       <div style={{ display: "grid", gap: 20 }}>
@@ -280,8 +292,10 @@ export default function HomeWidgets({ overview, transactions, history, selectedM
           ))}
         </div>
         {renderWidget("alerts")}
-        {renderWidget("trend")}
-        {renderWidget("pie")}
+        <div style={{ display: "grid", gap: 20, gridTemplateColumns: "1fr 1fr" }}>
+          {renderWidget("trend")}
+          {renderWidget("pie")}
+        </div>
         {renderWidget("recent")}
       </div>
     );
@@ -293,7 +307,7 @@ export default function HomeWidgets({ overview, transactions, history, selectedM
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 }}>
         {editMode && (
           <span style={{ fontSize: 12, color: "#64748b", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "5px 10px" }}>
-            ⠿ Drag to reorder · Eye to hide
+            ⠿ Drag · Eye Hide · ⬡ Size
           </span>
         )}
         <button
@@ -312,14 +326,16 @@ export default function HomeWidgets({ overview, transactions, history, selectedM
         </button>
       </div>
 
-      {/* ── Edit mode: show all widgets with drag handles ── */}
       {editMode ? (
-        <div style={{ display: "grid", gap: 20 }}>
+        /* ── Edit mode: flat list with drag / hide / size controls ── */
+        <div style={{ display: "grid", gap: 16 }}>
           {order.map((id, idx) => {
             const isHidden = config.hidden.includes(id);
             const isDragging = draggingId === id;
             const isDropTarget = overIdx === idx && draggingId !== id;
+            const size = config.sizes[id] ?? "full";
             const content = KPI_IDS.has(id) ? renderKpiCard(id) : renderWidget(id);
+            const canResize = RESIZABLE_IDS.has(id);
 
             return (
               <div
@@ -337,6 +353,7 @@ export default function HomeWidgets({ overview, transactions, history, selectedM
                   transition: "opacity 0.15s, border-color 0.15s",
                 }}
               >
+                {/* Toolbar */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 4px", marginBottom: 4 }}>
                   <span style={{ fontSize: 12, fontWeight: 800, color: "#64748b", letterSpacing: "0.3px", userSelect: "none", display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ fontSize: 16, lineHeight: 1 }}>⠿</span>
@@ -345,63 +362,74 @@ export default function HomeWidgets({ overview, transactions, history, selectedM
                       <span style={{ fontSize: 10, background: "#dbeafe", color: "#1e40af", borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>KPI</span>
                     )}
                   </span>
-                  <button
-                    onClick={() => toggleHidden(id)}
-                    style={{
-                      padding: "4px 12px", fontSize: 12, fontWeight: 700,
-                      border: "1px solid #e2e8f0", borderRadius: 8,
-                      background: isHidden ? "#fef2f2" : "#f0fdf4",
-                      color: isHidden ? "#dc2626" : "#16a34a",
-                      cursor: "pointer", font: "inherit",
-                    }}
-                  >
-                    {isHidden ? "Show" : "Hide"}
-                  </button>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {canResize && (
+                      <button
+                        onClick={() => cycleSize(id)}
+                        title={`Width: ${size} — click to toggle`}
+                        style={{
+                          padding: "4px 12px", fontSize: 12, fontWeight: 700,
+                          border: "1px solid #e2e8f0", borderRadius: 8,
+                          background: size === "half" ? "#eff6ff" : "#f8fafc",
+                          color: size === "half" ? "#1e40af" : "#475569",
+                          cursor: "pointer", font: "inherit",
+                        }}
+                      >
+                        {size === "half" ? "⬛ Half" : "⬜ Full"}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => toggleHidden(id)}
+                      style={{
+                        padding: "4px 12px", fontSize: 12, fontWeight: 700,
+                        border: "1px solid #e2e8f0", borderRadius: 8,
+                        background: isHidden ? "#fef2f2" : "#f0fdf4",
+                        color: isHidden ? "#dc2626" : "#16a34a",
+                        cursor: "pointer", font: "inherit",
+                      }}
+                    >
+                      {isHidden ? "Show" : "Hide"}
+                    </button>
+                  </div>
                 </div>
+
+                {/* Preview */}
                 {isHidden ? (
                   <div style={{ minHeight: 52, border: "2px dashed #e2e8f0", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", fontSize: 13, background: "#f8fafc" }}>
                     {WIDGET_LABELS[id] ?? id} — hidden
                   </div>
-                ) : (content ?? <div style={{ color: "#94a3b8", fontSize: 13, padding: 12 }}>No content</div>)}
+                ) : (
+                  <div style={{ opacity: 0.75, pointerEvents: "none" }}>
+                    {content ?? <div style={{ color: "#94a3b8", fontSize: 13, padding: 12 }}>No content</div>}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       ) : (
-        /* ── Normal mode: KPI cards grouped into grid rows ── */
+        /* ── Normal mode: grouped layout with half/full sizing ── */
         <div style={{ display: "grid", gap: 20 }}>
-          {buildWidgets(order, config.hidden)}
+          {buildLayout(order, config.hidden).map((row, i) => {
+            if (row.type === "kpi") {
+              return (
+                <div key={`kpi-${i}`} style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+                  {row.ids.map((id) => <div key={id}>{renderKpiCard(id)}</div>)}
+                </div>
+              );
+            }
+            if (row.type === "pair") {
+              return (
+                <div key={`pair-${i}`} style={{ display: "grid", gap: 20, gridTemplateColumns: "1fr 1fr" }}>
+                  <div>{renderWidget(row.a)}</div>
+                  <div>{renderWidget(row.b)}</div>
+                </div>
+              );
+            }
+            return <div key={`single-${i}`}>{renderWidget(row.id)}</div>;
+          })}
         </div>
       )}
-    </div>
-  );
-}
-
-// Simple wrapper (only used for non-KPI widgets in normal mode — unused now but kept for type safety)
-function WidgetWrapper({ children, id, isHidden, isDragging, isDropTarget, editMode, label, onToggleHidden, onDragStart, onDragOver, onDrop, onDragEnd, idx }: {
-  children: React.ReactNode; id: string; isHidden: boolean; isDragging: boolean; isDropTarget: boolean;
-  editMode: boolean; label: string; onToggleHidden: (id: string) => void;
-  onDragStart: (e: React.DragEvent, id: string) => void;
-  onDragOver: (e: React.DragEvent, idx: number) => void;
-  onDrop: (e: React.DragEvent, idx: number) => void;
-  onDragEnd: () => void; idx: number;
-}) {
-  return (
-    <div
-      draggable={editMode}
-      onDragStart={(e) => onDragStart(e, id)}
-      onDragOver={(e) => onDragOver(e, idx)}
-      onDrop={(e) => onDrop(e, idx)}
-      onDragEnd={onDragEnd}
-      style={{
-        opacity: isDragging ? 0.4 : isHidden ? 0.45 : 1,
-        cursor: editMode ? "grab" : "default",
-        borderRadius: 16,
-        border: isDropTarget ? "2px dashed #0f766e" : "2px solid transparent",
-        transition: "opacity 0.15s, border-color 0.15s",
-      }}
-    >
-      {children}
     </div>
   );
 }

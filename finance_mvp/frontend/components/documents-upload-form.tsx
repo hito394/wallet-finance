@@ -43,6 +43,7 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [sourceType, setSourceType] = useState<UploadSourceSelection>("auto");
+  const [forceImport, setForceImport] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -90,6 +91,18 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
         </div>
       </div>
 
+      <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, marginTop: 4, color: "#475569" }}>
+        <input
+          type="checkbox"
+          checked={forceImport}
+          onChange={(e) => setForceImport(e.target.checked)}
+        />
+        <span>
+          <strong>Force import</strong>
+          <span className="muted" style={{ marginLeft: 4 }}>(skip duplicate detection — re-imports even if already uploaded)</span>
+        </span>
+      </label>
+
       <div className="toolbar">
         <button
           type="button"
@@ -103,7 +116,7 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
             setProcessedDoc(null);
 
             // Step 1: upload → get import job ID
-            const uploadResult = await uploadDocument(file, sourceType, entityId);
+            const uploadResult = await uploadDocument(file, sourceType, entityId, forceImport);
             if (uploadResult.error || !uploadResult.data) {
               setIsUploading(false);
               setError(uploadResult.error || "Upload failed");

@@ -69,6 +69,7 @@ def process_import(
     local_file_path: str,
     *,
     force_reprocess: bool = False,
+    skip_dedup: bool = False,
 ) -> None:
     job.status = ImportStatus.processing
     job.processed_at = None
@@ -306,24 +307,25 @@ def process_import(
                 )
 
                 duplicate = None
-                if item.external_txn_id:
-                    duplicate = db.scalar(
-                        select(Transaction).where(
-                            Transaction.entity_id == job.entity_id,
-                            Transaction.external_txn_id == item.external_txn_id,
+                if not skip_dedup:
+                    if item.external_txn_id:
+                        duplicate = db.scalar(
+                            select(Transaction).where(
+                                Transaction.entity_id == job.entity_id,
+                                Transaction.external_txn_id == item.external_txn_id,
+                            )
                         )
-                    )
-                if duplicate is None:
-                    duplicate = find_duplicate_by_fingerprint(db, job.entity_id, fingerprint)
-                if duplicate is None:
-                    duplicate = find_duplicate_by_cross_source(
-                        db,
-                        job.entity_id,
-                        item.transaction_date,
-                        item.amount,
-                        item.source,
-                        item.description,
-                    )
+                    if duplicate is None:
+                        duplicate = find_duplicate_by_fingerprint(db, job.entity_id, fingerprint)
+                    if duplicate is None:
+                        duplicate = find_duplicate_by_cross_source(
+                            db,
+                            job.entity_id,
+                            item.transaction_date,
+                            item.amount,
+                            item.source,
+                            item.description,
+                        )
                 if duplicate:
                     if duplicate.import_id == job.id:
                         same_import_existing_count += 1

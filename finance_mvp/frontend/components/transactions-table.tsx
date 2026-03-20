@@ -20,6 +20,11 @@ type EditDraft = {
   category_id: string;
   notes: string;
   is_ignored: boolean;
+  transaction_date: string;
+  amount: string;
+  merchant_raw: string;
+  description: string;
+  direction: string;
 };
 
 export default function TransactionsTable({ rows, categories, entityId }: Props) {
@@ -61,6 +66,11 @@ export default function TransactionsTable({ rows, categories, entityId }: Props)
       category_id: row.category_id || "",
       notes: row.notes || "",
       is_ignored: row.is_ignored,
+      transaction_date: row.transaction_date,
+      amount: String(asNumber(row.amount)),
+      merchant_raw: row.merchant_raw || row.merchant_normalized || "",
+      description: row.description || "",
+      direction: row.direction,
     });
     setError(null);
     setSuccess(null);
@@ -126,6 +136,11 @@ export default function TransactionsTable({ rows, categories, entityId }: Props)
         category_id: draft.category_id || null,
         notes: draft.notes.trim() ? draft.notes.trim() : null,
         is_ignored: draft.is_ignored,
+        transaction_date: draft.transaction_date || undefined,
+        amount: draft.amount ? (draft.amount as unknown as number) : undefined,
+        merchant_raw: draft.merchant_raw.trim() || undefined,
+        description: draft.description.trim() || undefined,
+        direction: (draft.direction as "debit" | "credit" | "transfer") || undefined,
       },
       entityId,
     );
@@ -240,63 +255,100 @@ export default function TransactionsTable({ rows, categories, entityId }: Props)
                     {isEditing && draft && (
                       <tr>
                         <td colSpan={8}>
-                          <div style={{ background: "var(--soft)", border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
-                            <div className="form-grid" style={{ marginTop: 0 }}>
-                              <label>
-                                Category
+                          <div style={{ background: "var(--soft)", border: "1px solid var(--line)", borderRadius: 10, padding: 14 }}>
+                            {/* Row 1: transaction data */}
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 10 }}>
+                              <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                                <span style={{ fontWeight: 600, color: "#475569" }}>Date</span>
+                                <input
+                                  type="date"
+                                  className="input"
+                                  value={draft.transaction_date}
+                                  onChange={(e) => setDraft((prev) => prev ? { ...prev, transaction_date: e.target.value } : prev)}
+                                />
+                              </label>
+                              <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                                <span style={{ fontWeight: 600, color: "#475569" }}>Amount</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  className="input"
+                                  value={draft.amount}
+                                  onChange={(e) => setDraft((prev) => prev ? { ...prev, amount: e.target.value } : prev)}
+                                />
+                              </label>
+                              <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                                <span style={{ fontWeight: 600, color: "#475569" }}>Direction</span>
+                                <select
+                                  className="input"
+                                  value={draft.direction}
+                                  onChange={(e) => setDraft((prev) => prev ? { ...prev, direction: e.target.value } : prev)}
+                                >
+                                  <option value="debit">Debit</option>
+                                  <option value="credit">Credit</option>
+                                  <option value="transfer">Transfer</option>
+                                </select>
+                              </label>
+                              <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                                <span style={{ fontWeight: 600, color: "#475569" }}>Category</span>
                                 <select
                                   className="input"
                                   value={draft.category_id}
-                                  onChange={(event) => setDraft((prev) => prev ? { ...prev, category_id: event.target.value } : prev)}
+                                  onChange={(e) => setDraft((prev) => prev ? { ...prev, category_id: e.target.value } : prev)}
                                 >
                                   <option value="">Uncategorized</option>
-                                  {categories.map((category) => (
-                                    <option key={category.id} value={category.id}>
-                                      {category.name}
-                                    </option>
+                                  {categories.map((c) => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
                                   ))}
                                 </select>
                               </label>
-
-                              <label>
-                                Notes
-                                <textarea
+                            </div>
+                            {/* Row 2: merchant / description */}
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                              <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                                <span style={{ fontWeight: 600, color: "#475569" }}>Merchant</span>
+                                <input
+                                  type="text"
                                   className="input"
-                                  rows={3}
-                                  placeholder="Reason for correction, memo, or context"
-                                  value={draft.notes}
-                                  onChange={(event) => setDraft((prev) => prev ? { ...prev, notes: event.target.value } : prev)}
+                                  value={draft.merchant_raw}
+                                  onChange={(e) => setDraft((prev) => prev ? { ...prev, merchant_raw: e.target.value } : prev)}
+                                />
+                              </label>
+                              <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                                <span style={{ fontWeight: 600, color: "#475569" }}>Description</span>
+                                <input
+                                  type="text"
+                                  className="input"
+                                  value={draft.description}
+                                  onChange={(e) => setDraft((prev) => prev ? { ...prev, description: e.target.value } : prev)}
                                 />
                               </label>
                             </div>
-
-                            <label className="label" style={{ marginTop: 10 }}>
-                              <span>Options</span>
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                                <input
-                                  type="checkbox"
-                                  checked={draft.is_ignored}
-                                  onChange={(event) => setDraft((prev) => prev ? { ...prev, is_ignored: event.target.checked } : prev)}
-                                />
-                                Exclude from reports and totals
-                              </span>
+                            {/* Row 3: notes + ignore */}
+                            <label style={{ display: "grid", gap: 4, fontSize: 13, marginBottom: 10 }}>
+                              <span style={{ fontWeight: 600, color: "#475569" }}>Notes</span>
+                              <textarea
+                                className="input"
+                                rows={2}
+                                placeholder="Memo or correction reason"
+                                value={draft.notes}
+                                onChange={(e) => setDraft((prev) => prev ? { ...prev, notes: e.target.value } : prev)}
+                              />
+                            </label>
+                            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 12 }}>
+                              <input
+                                type="checkbox"
+                                checked={draft.is_ignored}
+                                onChange={(e) => setDraft((prev) => prev ? { ...prev, is_ignored: e.target.checked } : prev)}
+                              />
+                              Exclude from reports and totals
                             </label>
 
-                            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                              <button
-                                type="button"
-                                className="btn primary"
-                                onClick={saveEdit}
-                                disabled={pendingId === row.id}
-                              >
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button type="button" className="btn primary" onClick={saveEdit} disabled={pendingId === row.id}>
                                 {pendingId === row.id ? "Saving..." : "Save correction"}
                               </button>
-                              <button
-                                type="button"
-                                className="btn secondary"
-                                onClick={cancelEdit}
-                                disabled={pendingId === row.id}
-                              >
+                              <button type="button" className="btn secondary" onClick={cancelEdit} disabled={pendingId === row.id}>
                                 Cancel
                               </button>
                             </div>

@@ -73,6 +73,11 @@ export type TransactionUpdatePayload = {
   notes?: string | null;
   is_ignored?: boolean;
   receipt_id?: string | null;
+  transaction_date?: string;
+  amount?: number;
+  merchant_raw?: string;
+  description?: string;
+  direction?: "debit" | "credit" | "transfer";
 };
 
 export type DocumentItem = {
@@ -364,13 +369,14 @@ export async function uploadDocument(
   file: File,
   sourceType: UploadSourceSelection,
   entityId?: string,
+  force?: boolean,
 ): Promise<ApiResult<ImportJob>> {
   const form = new FormData();
   form.set("file", file);
-  const query =
-    sourceType && sourceType !== "auto"
-      ? `?source_type=${encodeURIComponent(sourceType)}`
-      : "";
+  const params = new URLSearchParams();
+  if (sourceType && sourceType !== "auto") params.set("source_type", sourceType);
+  if (force) params.set("force", "true");
+  const query = params.toString() ? `?${params.toString()}` : "";
   const path = `/imports/upload${query}`;
   const url = `${resolveApiBaseUrl()}${path}`;
 

@@ -2,7 +2,7 @@ import hashlib
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -174,12 +174,12 @@ def _persist_upload_and_hash(file: UploadFile, destination: Path) -> str:
     return digest.hexdigest()
 
 
-def _run_import_job(import_id: str) -> None:
+def _run_import_job(import_id: str, *, skip_dedup: bool = False) -> None:
     with SessionLocal() as db:
         job = db.scalar(select(ImportJob).where(ImportJob.id == import_id))
         if not job:
             return
-        process_import(db, job, job.storage_uri)
+        process_import(db, job, job.storage_uri, skip_dedup=skip_dedup)
 
 
 @router.post("/upload", response_model=ImportJobRead, status_code=status.HTTP_201_CREATED)
@@ -187,6 +187,7 @@ def upload_import(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     source_type: str | None = None,
+    force: bool = Query(default=False, description="Bypass idempotency guard and duplicate transaction detection"),
     x_user_id: str | None = Header(default=None),
     x_entity_id: str | None = Header(default=None),
     db: Session = Depends(get_db),
@@ -247,7 +248,7 @@ def upload_import(
         if existing_document and existing_document.parsing_status == "failed":
             existing = None
 
-    if existing and existing.status in {ImportStatus.pending, ImportStatus.processing, ImportStatus.completed}:
+    if not force and existing and existing.status in {ImportStatus.pending, ImportStatus.processing, ImportStatus.completed}:
         # Best-effort cleanup: this request uploaded a duplicate payload, so we
         # can discard the newly written temporary file.
         try:
@@ -273,13 +274,13 @@ def upload_import(
         file_name=safe_name,
         file_hash=file_hash,
         storage_uri=str(destination),
-        metadata_json={},
+        metadata_json={"force_import": True} if force else {},
     )
     db.add(job)
     db.commit()
     db.refresh(job)
 
-    background_tasks.add_task(_run_import_job, str(job.id))
+    background_tasks.add_task(_run_import_job, str(job.id), skip_dedup=force)
 
     return job
 

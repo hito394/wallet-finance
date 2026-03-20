@@ -34,6 +34,12 @@ class TransactionUpdate(BaseModel):
     receipt_id: uuid.UUID | None = None
     notes: str | None = None
     is_ignored: bool | None = None
+    # Manual data correction fields
+    transaction_date: date | None = None
+    amount: Decimal | None = None
+    merchant_raw: str | None = None
+    description: str | None = None
+    direction: str | None = None  # "debit" | "credit" | "transfer"
 
 
 class ReclassifyTransactionsResponse(BaseModel):

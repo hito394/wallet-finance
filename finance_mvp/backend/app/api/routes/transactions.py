@@ -99,28 +99,49 @@ def update_transaction(
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
+    # Fields that require fingerprint recalculation when changed
+    fingerprint_fields = {"transaction_date", "amount", "merchant_raw", "description"}
+    needs_fingerprint_update = False
+
     for key, value in payload.model_dump(exclude_unset=True).items():
         old_value = getattr(transaction, key)
+        if old_value == value:
+            continue
         setattr(transaction, key, value)
 
-        if old_value != value:
-            feedback_type = None
-            if key == "category_id":
-                feedback_type = FeedbackType.category_update
-            elif key == "receipt_id":
-                feedback_type = FeedbackType.receipt_link
+        if key in fingerprint_fields:
+            needs_fingerprint_update = True
 
-            if feedback_type:
-                db.add(
-                    LearningFeedback(
-                        user_id=user.id,
-                        entity_id=entity.id,
-                        feedback_type=feedback_type,
-                        source_object="transaction",
-                        source_id=transaction.id,
-                        payload={"field": key, "old": str(old_value), "new": str(value)},
-                    )
+        feedback_type = None
+        if key == "category_id":
+            feedback_type = FeedbackType.category_update
+        elif key == "receipt_id":
+            feedback_type = FeedbackType.receipt_link
+
+        if feedback_type:
+            db.add(
+                LearningFeedback(
+                    user_id=user.id,
+                    entity_id=entity.id,
+                    feedback_type=feedback_type,
+                    source_object="transaction",
+                    source_id=transaction.id,
+                    payload={"field": key, "old": str(old_value), "new": str(value)},
                 )
+            )
+
+    if needs_fingerprint_update:
+        from app.utils.fingerprint import transaction_fingerprint
+        transaction.fingerprint = transaction_fingerprint(
+            transaction.transaction_date,
+            transaction.amount,
+            transaction.merchant_raw or "",
+            transaction.description or "",
+            transaction.source.value if hasattr(transaction.source, "value") else str(transaction.source),
+        )
+        if "merchant_raw" in payload.model_dump(exclude_unset=True):
+            from app.services.normalization.merchant_normalizer import normalize_merchant
+            transaction.merchant_normalized = normalize_merchant(transaction.merchant_raw or "")
 
     db.add(transaction)
     db.commit()
