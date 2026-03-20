@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from app.services.parsers.csv_statement_parser import parse_csv_statement
+from app.services.parsers.pdf_statement_parser import parse_statement_text_with_diagnostics
 from app.services.parsers.receipt_ocr import parse_receipt
 
 
@@ -128,3 +129,39 @@ class TestReceiptOCRExtractText:
         result = parse_receipt(path)
         assert result.confidence == 0.5
         assert result.total_amount is None
+
+
+class TestStatementTextFallbackParser:
+    def test_parses_compound_line_with_two_transactions(self):
+        text = textwrap.dedent(
+            """\
+            TRANSACTION DETAIL
+            DATE DESCRIPTION AMOUNT BALANCE
+            12/03 ATM Cash Deposit 12/03 Branch 3,000.00 3,305.21 12/04 Watterscape Urba Web Pmts -1,625.93 1,679.28
+            """
+        )
+
+        rows, diagnostics = parse_statement_text_with_diagnostics(text, source="bank")
+
+        assert len(rows) == 2
+        assert rows[0].transaction_date.month == 12
+        assert rows[0].transaction_date.day == 3
+        assert rows[0].amount == Decimal("3000.00")
+        assert rows[0].running_balance == Decimal("3305.21")
+        assert rows[1].amount == Decimal("1625.93")
+        assert rows[1].running_balance == Decimal("1679.28")
+        assert diagnostics.matched_rows >= 2
+
+    def test_does_not_split_on_embedded_date_before_amount(self):
+        text = textwrap.dedent(
+            """\
+            TRANSACTION DETAIL
+            12/15 Card Purchase 12/14 Subway 69602 Dfw Airport TX Card 5003 -16.77 4,478.08
+            """
+        )
+
+        rows, _ = parse_statement_text_with_diagnostics(text, source="bank")
+
+        assert len(rows) == 1
+        assert rows[0].amount == Decimal("16.77")
+        assert rows[0].running_balance == Decimal("4478.08")

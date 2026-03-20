@@ -224,6 +224,53 @@ def _should_skip_line(line_upper: str) -> bool:
     return any(keyword in line_upper for keyword in SUMMARY_LINE_KEYWORDS)
 
 
+def _split_compound_transaction_line(line: str) -> list[str]:
+    """Split a line that may contain multiple transaction rows.
+
+    Some OCR outputs collapse multiple statement rows into one physical line:
+    "MM/DD ... amount balance MM/DD ... amount balance".
+    We only split at date tokens when the preceding chunk already ends with an
+    amount token, which avoids breaking posted-date fragments inside a single
+    transaction description.
+    """
+    normalized = re.sub(r"\s+", " ", (line or "").strip())
+    if not normalized:
+        return []
+
+    # Only date-prefixed rows are candidates for transaction splitting.
+    if not DATE_PREFIX_PATTERN.match(normalized):
+        return [normalized]
+
+    date_start_pattern = re.compile(rf"(?<!\d)(?:{DATE_PATTERN})(?=\s)")
+    starts = [m.start() for m in date_start_pattern.finditer(normalized)]
+    if len(starts) <= 1:
+        return [normalized]
+
+    chunks: list[str] = []
+    split_at = 0
+    for candidate_start in starts[1:]:
+        segment = normalized[split_at:candidate_start].strip()
+        if not segment:
+            continue
+
+        amount_matches = list(AMOUNT_TOKEN_PATTERN.finditer(segment))
+        # Split only when the previous segment appears complete.
+        if not amount_matches:
+            continue
+        tail = segment[amount_matches[-1].end() :].strip()
+        if tail:
+            continue
+
+        chunks.append(segment)
+        split_at = candidate_start
+
+    remainder = normalized[split_at:].strip()
+    if remainder:
+        chunks.append(remainder)
+
+    return chunks or [normalized]
+
+
 def _parse_transaction_line(
     line: str,
     *,
@@ -426,26 +473,28 @@ def parse_pdf_statement_with_diagnostics(
                     if ACCOUNT_NUMBER_PATTERN.search(raw_line):
                         diagnostics.suspicious_account_number_rows += 1
 
-                    tx = _parse_transaction_line(
-                        raw_line,
-                        source=source,
-                        diagnostics=diagnostics,
-                        section_direction=section_direction,
-                    )
-                    if tx is None:
-                        continue
+                    candidate_lines = _split_compound_transaction_line(raw_line)
+                    for candidate in candidate_lines:
+                        tx = _parse_transaction_line(
+                            candidate,
+                            source=source,
+                            diagnostics=diagnostics,
+                            section_direction=section_direction,
+                        )
+                        if tx is None:
+                            continue
 
-                    score = 1
-                    if in_detail_section:
-                        score += 2
-                    if in_summary_section:
-                        score -= 2
-                    if issuer == "chase" and tx.posted_date is not None:
-                        score += 1
+                        score = 1
+                        if in_detail_section:
+                            score += 2
+                        if in_summary_section:
+                            score -= 2
+                        if issuer == "chase" and tx.posted_date is not None:
+                            score += 1
 
-                    if score >= 1:
-                        diagnostics.matched_rows += 1
-                        scored_rows.append((score, tx))
+                        if score >= 1:
+                            diagnostics.matched_rows += 1
+                            scored_rows.append((score, tx))
 
     except Exception:
         return [], StatementParseDiagnostics(issuer="unknown")
@@ -473,52 +522,54 @@ def parse_statement_text_with_diagnostics(
     section_direction: str | None = None
 
     for raw_line in text.splitlines():
-        line = re.sub(r"\s+", " ", (raw_line or "").strip())
-        if not line:
+        normalized_line = re.sub(r"\s+", " ", (raw_line or "").strip())
+        if not normalized_line:
             continue
 
-        if _has_section_title(line, DETAIL_SECTION_TITLES):
+        if _has_section_title(normalized_line, DETAIL_SECTION_TITLES):
             diagnostics.detail_section_hits += 1
             in_detail_section = True
             in_summary_section = False
-            if _has_section_title(line, CREDIT_SECTION_TITLES):
+            if _has_section_title(normalized_line, CREDIT_SECTION_TITLES):
                 section_direction = "credit"
-            elif _has_section_title(line, DEBIT_SECTION_TITLES):
+            elif _has_section_title(normalized_line, DEBIT_SECTION_TITLES):
                 section_direction = "debit"
             else:
                 section_direction = None
             continue
 
-        if _has_section_title(line, SUMMARY_SECTION_TITLES):
+        if _has_section_title(normalized_line, SUMMARY_SECTION_TITLES):
             diagnostics.summary_section_hits += 1
             in_summary_section = True
             in_detail_section = False
             section_direction = None
             continue
 
-        if ACCOUNT_NUMBER_PATTERN.search(line):
+        if ACCOUNT_NUMBER_PATTERN.search(normalized_line):
             diagnostics.suspicious_account_number_rows += 1
 
-        tx = _parse_transaction_line(
-            line,
-            source=source,
-            diagnostics=diagnostics,
-            section_direction=section_direction,
-        )
-        if tx is None:
-            continue
+        candidate_lines = _split_compound_transaction_line(normalized_line)
+        for candidate in candidate_lines:
+            tx = _parse_transaction_line(
+                candidate,
+                source=source,
+                diagnostics=diagnostics,
+                section_direction=section_direction,
+            )
+            if tx is None:
+                continue
 
-        score = 1
-        if in_detail_section:
-            score += 2
-        if in_summary_section:
-            score -= 2
-        if issuer == "chase" and tx.posted_date is not None:
-            score += 1
+            score = 1
+            if in_detail_section:
+                score += 2
+            if in_summary_section:
+                score -= 2
+            if issuer == "chase" and tx.posted_date is not None:
+                score += 1
 
-        if score >= 1:
-            diagnostics.matched_rows += 1
-            scored_rows.append((score, tx))
+            if score >= 1:
+                diagnostics.matched_rows += 1
+                scored_rows.append((score, tx))
 
     parsed = _dedupe_scored_rows(scored_rows)
     _set_parser_confidence(parsed, diagnostics)
