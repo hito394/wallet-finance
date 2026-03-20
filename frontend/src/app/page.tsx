@@ -1,10 +1,9 @@
 import { getDashboard, getTransactions } from '@/lib/api';
-import { DashboardWidgets } from '@/components/dashboard/DashboardWidgets';
-import { TrendingUp } from 'lucide-react';
+import { HomeClient } from '@/components/HomeClient';
 
 export const revalidate = 30;
 
-export default async function DashboardPage() {
+export default async function HomePage() {
   let dashboard = null;
   let recentTxs = null;
   let error = null;
@@ -42,7 +41,6 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-6 md:p-8 space-y-6 max-w-6xl mx-auto">
-
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
@@ -50,19 +48,18 @@ export default async function DashboardPage() {
             {year}年{month}月
           </p>
           <h2 className="text-xl font-bold" style={{ color: '#F1F5F9' }}>
-            ダッシュボード
+            ホーム
           </h2>
         </div>
         <div
           className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium"
           style={{ backgroundColor: '#1A1C2E', color: '#7C6FFF', border: '1px solid #2A2D42' }}
         >
-          <TrendingUp size={12} />
           {dashboard.month_transaction_count}件の取引
         </div>
       </div>
 
-      <DashboardWidgets
+      <HomeClient
         dashboard={dashboard}
         transactions={recentTxs?.items ?? []}
       />
