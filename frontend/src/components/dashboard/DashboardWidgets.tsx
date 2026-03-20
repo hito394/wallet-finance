@@ -9,7 +9,15 @@ import { RecentTransactions } from './RecentTransactions';
 import { AlertTriangle, FileSearch, Copy } from 'lucide-react';
 import type { DashboardSummary, Transaction } from '@/types';
 
-type WidgetId = 'kpi' | 'trend' | 'category' | 'transactions';
+type WidgetId =
+  | 'kpi_expense'
+  | 'kpi_income'
+  | 'kpi_net'
+  | 'kpi_imports'
+  | 'alerts'
+  | 'trend'
+  | 'category'
+  | 'transactions';
 
 type WidgetConfig = {
   id: WidgetId;
@@ -17,14 +25,20 @@ type WidgetConfig = {
   visible: boolean;
 };
 
+const KPI_IDS = new Set<WidgetId>(['kpi_expense', 'kpi_income', 'kpi_net', 'kpi_imports']);
+
 const DEFAULT_CONFIG: WidgetConfig[] = [
-  { id: 'kpi',          label: 'サマリーカード',   visible: true },
-  { id: 'trend',        label: '月次トレンド',     visible: true },
-  { id: 'category',     label: 'カテゴリ別支出',   visible: true },
-  { id: 'transactions', label: '直近の取引',       visible: true },
+  { id: 'kpi_expense',  label: '今月の支出',     visible: true },
+  { id: 'kpi_income',   label: '今月の収入',     visible: true },
+  { id: 'kpi_net',      label: '収支',           visible: true },
+  { id: 'kpi_imports',  label: 'インポート回数', visible: true },
+  { id: 'alerts',       label: 'アラート',       visible: true },
+  { id: 'trend',        label: '月次トレンド',   visible: true },
+  { id: 'category',     label: 'カテゴリ別支出', visible: true },
+  { id: 'transactions', label: '直近の取引',     visible: true },
 ];
 
-const STORAGE_KEY = 'dashboard_widget_config_v1';
+const STORAGE_KEY = 'dashboard_widget_config_v2';
 
 function loadConfig(): WidgetConfig[] {
   try {
@@ -90,6 +104,12 @@ function EditPanel({
     dragIdx.current = null;
   }
 
+  // Group label for display
+  function groupTag(id: WidgetId): string | null {
+    if (KPI_IDS.has(id)) return 'KPI';
+    return null;
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center md:items-center"
@@ -120,7 +140,7 @@ function EditPanel({
           </button>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
           {local.map((widget, idx) => (
             <div
               key={widget.id}
@@ -139,6 +159,14 @@ function EditPanel({
               <span className="flex-1 text-sm font-medium" style={{ color: '#CBD5E1' }}>
                 {widget.label}
               </span>
+              {groupTag(widget.id) && (
+                <span
+                  className="text-xs px-1.5 py-0.5 rounded-md"
+                  style={{ backgroundColor: '#1E2246', color: '#7C6FFF', fontSize: '10px' }}
+                >
+                  {groupTag(widget.id)}
+                </span>
+              )}
               <button
                 onClick={() => toggle(widget.id)}
                 className="w-8 h-8 rounded-lg flex items-center justify-center transition-all"
@@ -191,37 +219,96 @@ export function DashboardWidgets({ dashboard, transactions }: Props) {
   const income  = Math.round(parseFloat(dashboard.month_total_income));
   const net     = Math.round(parseFloat(dashboard.month_net));
 
-  function renderWidget(id: WidgetId) {
+  // ── Render individual KPI card ──
+  function renderKpiCard(id: WidgetId) {
     switch (id) {
-      case 'kpi':
+      case 'kpi_expense':
+        return <SummaryCard key="kpi_expense" title="今月の支出" value={`¥${expense.toLocaleString()}`} sub={`${dashboard.month_transaction_count}件`} icon="💸" color="red" />;
+      case 'kpi_income':
+        return <SummaryCard key="kpi_income" title="今月の収入" value={`¥${income.toLocaleString()}`} icon="💰" color="green" />;
+      case 'kpi_net':
+        return <SummaryCard key="kpi_net" title="収支" value={`${net >= 0 ? '+' : ''}¥${net.toLocaleString()}`} icon={net >= 0 ? '📈' : '📉'} color={net >= 0 ? 'green' : 'red'} />;
+      case 'kpi_imports':
+        return <SummaryCard key="kpi_imports" title="インポート回数" value={`${dashboard.total_import_count}回`} icon="📂" color="purple" />;
+      default:
+        return null;
+    }
+  }
+
+  // ── Render a non-KPI widget ──
+  function renderWidget(id: WidgetId, key: string) {
+    const trendVisible = config.find(w => w.id === 'trend')?.visible ?? false;
+    const categoryVisible = config.find(w => w.id === 'category')?.visible ?? false;
+
+    switch (id) {
+      case 'alerts': {
+        const hasAlerts =
+          dashboard.uncategorized_count > 0 ||
+          dashboard.possible_duplicate_count > 0 ||
+          dashboard.unmatched_receipt_count > 0;
+        if (!hasAlerts) return null;
         return (
-          <div key="kpi" className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <SummaryCard title="今月の支出" value={`¥${expense.toLocaleString()}`} sub={`${dashboard.month_transaction_count}件`} icon="💸" color="red" />
-            <SummaryCard title="今月の収入" value={`¥${income.toLocaleString()}`} icon="💰" color="green" />
-            <SummaryCard title="収支" value={`${net >= 0 ? '+' : ''}¥${net.toLocaleString()}`} icon={net >= 0 ? '📈' : '📉'} color={net >= 0 ? 'green' : 'red'} />
-            <SummaryCard title="インポート回数" value={`${dashboard.total_import_count}回`} icon="📂" color="purple" />
+          <div key={key} className="flex flex-wrap gap-2">
+            {dashboard.uncategorized_count > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#2D2006', color: '#FCD34D', border: '1px solid #78350F' }}>
+                <AlertTriangle size={12} />未分類 {dashboard.uncategorized_count}件
+              </div>
+            )}
+            {dashboard.possible_duplicate_count > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#2D1A06', color: '#FDBA74', border: '1px solid #7C2D12' }}>
+                <Copy size={12} />重複候補 {dashboard.possible_duplicate_count}件
+              </div>
+            )}
+            {dashboard.unmatched_receipt_count > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#1A0D2E', color: '#C4B5FD', border: '1px solid #581C87' }}>
+                <FileSearch size={12} />未マッチレシート {dashboard.unmatched_receipt_count}件
+              </div>
+            )}
           </div>
         );
+      }
 
       case 'trend':
-        return (
-          <div key="trend" className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-            <div className="rounded-2xl p-5 lg:col-span-3" style={{ backgroundColor: '#13151F', border: '1px solid #1E2030' }}>
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-sm font-semibold" style={{ color: '#CBD5E1' }}>月次収支トレンド</h3>
-                <span className="text-xs" style={{ color: '#475569' }}>直近12ヶ月</span>
+        if (trendVisible && categoryVisible) {
+          // Side-by-side with category — rendered by the 'trend' slot
+          return (
+            <div key={key} className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+              <div className="rounded-2xl p-5 lg:col-span-3" style={{ backgroundColor: '#13151F', border: '1px solid #1E2030' }}>
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="text-sm font-semibold" style={{ color: '#CBD5E1' }}>月次収支トレンド</h3>
+                  <span className="text-xs" style={{ color: '#475569' }}>直近12ヶ月</span>
+                </div>
+                <SpendingChart data={dashboard.monthly_trends} />
               </div>
-              <SpendingChart data={dashboard.monthly_trends} />
+              <div className="rounded-2xl p-5 lg:col-span-2" style={{ backgroundColor: '#13151F', border: '1px solid #1E2030' }}>
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="text-sm font-semibold" style={{ color: '#CBD5E1' }}>カテゴリ別支出</h3>
+                  <span className="text-xs" style={{ color: '#475569' }}>今月</span>
+                </div>
+                {dashboard.category_breakdown.length > 0 ? (
+                  <CategoryPieChart data={dashboard.category_breakdown} />
+                ) : (
+                  <p className="text-sm text-center py-12" style={{ color: '#475569' }}>データなし</p>
+                )}
+              </div>
             </div>
-            {config.find(w => w.id === 'category')?.visible ? null : (
-              <div className="hidden lg:block lg:col-span-2" />
-            )}
+          );
+        }
+        return (
+          <div key={key} className="rounded-2xl p-5" style={{ backgroundColor: '#13151F', border: '1px solid #1E2030' }}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-sm font-semibold" style={{ color: '#CBD5E1' }}>月次収支トレンド</h3>
+              <span className="text-xs" style={{ color: '#475569' }}>直近12ヶ月</span>
+            </div>
+            <SpendingChart data={dashboard.monthly_trends} />
           </div>
         );
 
       case 'category':
+        // Skip if trend is visible (already rendered side-by-side)
+        if (trendVisible) return null;
         return (
-          <div key="category" className="rounded-2xl p-5" style={{ backgroundColor: '#13151F', border: '1px solid #1E2030' }}>
+          <div key={key} className="rounded-2xl p-5" style={{ backgroundColor: '#13151F', border: '1px solid #1E2030' }}>
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-sm font-semibold" style={{ color: '#CBD5E1' }}>カテゴリ別支出</h3>
               <span className="text-xs" style={{ color: '#475569' }}>今月</span>
@@ -236,7 +323,7 @@ export function DashboardWidgets({ dashboard, transactions }: Props) {
 
       case 'transactions':
         return (
-          <div key="transactions" className="rounded-2xl p-5" style={{ backgroundColor: '#13151F', border: '1px solid #1E2030' }}>
+          <div key={key} className="rounded-2xl p-5" style={{ backgroundColor: '#13151F', border: '1px solid #1E2030' }}>
             <h3 className="text-sm font-semibold mb-4" style={{ color: '#CBD5E1' }}>直近の取引</h3>
             <RecentTransactions transactions={transactions} />
           </div>
@@ -247,34 +334,36 @@ export function DashboardWidgets({ dashboard, transactions }: Props) {
     }
   }
 
-  // Handle trend+category side-by-side layout specially
-  const visibleIds = config.filter(w => w.visible).map(w => w.id);
-  const trendVisible = visibleIds.includes('trend');
-  const categoryVisible = visibleIds.includes('category');
+  // ── Build rendered list ──
+  function buildWidgets() {
+    const elements: React.ReactNode[] = [];
+    let kpiRowRendered = false;
+
+    for (const w of config) {
+      if (!w.visible) continue;
+
+      if (KPI_IDS.has(w.id)) {
+        if (!kpiRowRendered) {
+          kpiRowRendered = true;
+          const visibleKpis = config.filter(c => KPI_IDS.has(c.id) && c.visible);
+          elements.push(
+            <div key="kpi-row" className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {visibleKpis.map(c => renderKpiCard(c.id))}
+            </div>
+          );
+        }
+        continue;
+      }
+
+      const node = renderWidget(w.id, w.id);
+      if (node) elements.push(node);
+    }
+
+    return elements;
+  }
 
   return (
     <>
-      {/* Alerts */}
-      {(dashboard.uncategorized_count > 0 || dashboard.possible_duplicate_count > 0 || dashboard.unmatched_receipt_count > 0) && (
-        <div className="flex flex-wrap gap-2">
-          {dashboard.uncategorized_count > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#2D2006', color: '#FCD34D', border: '1px solid #78350F' }}>
-              <AlertTriangle size={12} />未分類 {dashboard.uncategorized_count}件
-            </div>
-          )}
-          {dashboard.possible_duplicate_count > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#2D1A06', color: '#FDBA74', border: '1px solid #7C2D12' }}>
-              <Copy size={12} />重複候補 {dashboard.possible_duplicate_count}件
-            </div>
-          )}
-          {dashboard.unmatched_receipt_count > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#1A0D2E', color: '#C4B5FD', border: '1px solid #581C87' }}>
-              <FileSearch size={12} />未マッチレシート {dashboard.unmatched_receipt_count}件
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Widget edit button */}
       <div className="flex justify-end">
         <button
@@ -298,45 +387,20 @@ export function DashboardWidgets({ dashboard, transactions }: Props) {
       {/* Widgets */}
       {mounted ? (
         <div className="space-y-5">
-          {config.map(w => {
-            if (!w.visible) return null;
-            // Render trend and category side-by-side
-            if (w.id === 'trend' && categoryVisible) {
-              const catIdx = config.findIndex(c => c.id === 'category');
-              const trendIdx = config.findIndex(c => c.id === 'trend');
-              // Only render the combined block when we encounter trend
-              return (
-                <div key="trend-category" className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-                  <div className="rounded-2xl p-5 lg:col-span-3" style={{ backgroundColor: '#13151F', border: '1px solid #1E2030' }}>
-                    <div className="flex items-center justify-between mb-5">
-                      <h3 className="text-sm font-semibold" style={{ color: '#CBD5E1' }}>月次収支トレンド</h3>
-                      <span className="text-xs" style={{ color: '#475569' }}>直近12ヶ月</span>
-                    </div>
-                    <SpendingChart data={dashboard.monthly_trends} />
-                  </div>
-                  <div className="rounded-2xl p-5 lg:col-span-2" style={{ backgroundColor: '#13151F', border: '1px solid #1E2030' }}>
-                    <div className="flex items-center justify-between mb-5">
-                      <h3 className="text-sm font-semibold" style={{ color: '#CBD5E1' }}>カテゴリ別支出</h3>
-                      <span className="text-xs" style={{ color: '#475569' }}>今月</span>
-                    </div>
-                    {dashboard.category_breakdown.length > 0 ? (
-                      <CategoryPieChart data={dashboard.category_breakdown} />
-                    ) : (
-                      <p className="text-sm text-center py-12" style={{ color: '#475569' }}>データなし</p>
-                    )}
-                  </div>
-                </div>
-              );
-            }
-            // Skip category if trend is also visible (already rendered above)
-            if (w.id === 'category' && trendVisible) return null;
-            return renderWidget(w.id);
-          })}
+          {buildWidgets()}
         </div>
       ) : (
-        // SSR fallback - render all widgets
+        // SSR fallback
         <div className="space-y-5">
-          {DEFAULT_CONFIG.map(w => renderWidget(w.id))}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {renderKpiCard('kpi_expense')}
+            {renderKpiCard('kpi_income')}
+            {renderKpiCard('kpi_net')}
+            {renderKpiCard('kpi_imports')}
+          </div>
+          {renderWidget('alerts', 'alerts')}
+          {renderWidget('trend', 'trend')}
+          {renderWidget('transactions', 'transactions')}
         </div>
       )}
 

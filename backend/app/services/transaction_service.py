@@ -122,8 +122,8 @@ class TransactionService:
     async def find_duplicate_groups(
         self, user_id: int
     ) -> list[list[TransactionOut]]:
-        """同一dedup_hashを持つ取引グループを重複候補として返す"""
-        # dedup_hashが同一で2件以上ある取引を取得
+        """重複候補グループを返す: ハッシュ完全一致 + ファジー検出（同金額・方向・±3日）"""
+        # ── 1. ハッシュ完全一致 ──
         subq = (
             select(Transaction.dedup_hash)
             .where(
@@ -135,7 +135,9 @@ class TransactionService:
         )
         dup_hashes = (await self.db.execute(subq)).scalars().all()
 
-        groups = []
+        groups: list[list[TransactionOut]] = []
+        exact_ids: set[int] = set()
+
         for dh in dup_hashes:
             stmt = select(Transaction).where(
                 Transaction.user_id == user_id,
@@ -143,6 +145,40 @@ class TransactionService:
             ).order_by(Transaction.created_at)
             rows = (await self.db.execute(stmt)).scalars().all()
             groups.append([TransactionOut.model_validate(r) for r in rows])
+            for r in rows:
+                exact_ids.add(r.id)
+
+        # ── 2. ファジー検出: 同金額・同方向・±3日・異なるハッシュ ──
+        all_stmt = (
+            select(Transaction)
+            .where(
+                Transaction.user_id == user_id,
+                Transaction.is_ignored == False,  # noqa: E712
+            )
+            .order_by(Transaction.amount, Transaction.direction, Transaction.transaction_date)
+        )
+        all_txs = (await self.db.execute(all_stmt)).scalars().all()
+
+        seen_pairs: set[frozenset] = set()
+        for i, tx1 in enumerate(all_txs):
+            if tx1.id in exact_ids:
+                continue
+            for j in range(i + 1, len(all_txs)):
+                tx2 = all_txs[j]
+                if tx2.amount != tx1.amount or tx2.direction != tx1.direction:
+                    break
+                date_diff = (tx2.transaction_date - tx1.transaction_date).days
+                if date_diff > 3:
+                    break
+                if tx2.id in exact_ids:
+                    continue
+                pair = frozenset([tx1.id, tx2.id])
+                if pair not in seen_pairs:
+                    seen_pairs.add(pair)
+                    groups.append([
+                        TransactionOut.model_validate(tx1),
+                        TransactionOut.model_validate(tx2),
+                    ])
 
         return groups
 
