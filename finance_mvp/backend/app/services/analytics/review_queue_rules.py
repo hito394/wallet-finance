@@ -10,10 +10,9 @@ _STATEMENT_TYPES = {
 def derive_review_reason(document: FinancialDocument) -> tuple[bool, str | None, str | None]:
     if document.document_type == FinancialDocumentType.unknown_financial_document:
         return True, "unknown_document_type", "Unknown financial document type"
-    if document.possible_duplicate_document:
-        return True, "possible_duplicate", "Possible duplicate document"
 
     # Statements are judged by transaction-row extraction outcome, not by total amount.
+    # Skip the document-level duplicate check for statements — dedup is done row by row.
     if document.document_type in _STATEMENT_TYPES:
         failure_reason = (document.parsing_failure_reason or "").lower()
         extracted_count = document.extracted_transaction_count or 0
@@ -56,6 +55,9 @@ def derive_review_reason(document: FinancialDocument) -> tuple[bool, str | None,
 
     if document.extraction_confidence < 0.5:
         return True, "low_ocr_confidence", "Low OCR confidence; verify extracted values"
+
+    if document.possible_duplicate_document:
+        return True, "possible_duplicate", "Possible duplicate document"
 
     # Non-statement docs: flag for missing total amount
     if document.total_amount is None:

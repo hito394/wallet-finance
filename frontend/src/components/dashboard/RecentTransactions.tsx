@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import type { Transaction } from '@/types';
 import { formatDate, CATEGORY_LABELS, CATEGORY_COLORS } from '@/lib/api';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 
 interface Props {
   transactions: Transaction[];
@@ -63,12 +63,22 @@ export function RecentTransactions({ transactions }: Props) {
               </div>
 
               {/* Amount */}
-              <span
-                className="text-sm font-semibold tabular-nums shrink-0 ml-4"
-                style={{ color: isCredit ? '#4ADE80' : '#F1F5F9' }}
-              >
-                {isCredit ? '+' : '-'}¥{Math.round(parseFloat(tx.amount)).toLocaleString()}
-              </span>
+              <div className="flex items-center gap-1.5 shrink-0 ml-4">
+                <span
+                  className="w-5 h-5 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: isCredit ? '#4ADE8020' : '#F8717120' }}
+                >
+                  {isCredit
+                    ? <ArrowDownLeft size={11} color="#4ADE80" />
+                    : <ArrowUpRight size={11} color="#F87171" />}
+                </span>
+                <span
+                  className="text-sm font-semibold tabular-nums"
+                  style={{ color: isCredit ? '#4ADE80' : '#F87171' }}
+                >
+                  {isCredit ? '+' : '-'}¥{Math.round(parseFloat(tx.amount)).toLocaleString()}
+                </span>
+              </div>
             </div>
           );
         })}

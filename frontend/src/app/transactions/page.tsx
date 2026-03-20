@@ -5,7 +5,7 @@ import useSWR from 'swr';
 import { getTransactions, updateTransaction, CATEGORY_LABELS, CATEGORY_COLORS, formatDate } from '@/lib/api';
 import type { Transaction } from '@/types';
 import clsx from 'clsx';
-import { Pencil, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { Pencil, ChevronLeft, ChevronRight, Search, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 
 const fetcher = (params: Record<string, string | number | boolean>) =>
   getTransactions(params);
@@ -195,11 +195,23 @@ export default function TransactionsPage() {
                         {CATEGORY_LABELS[tx.category ?? 'other'] ?? tx.category}
                       </span>
                     </td>
-                    <td
-                      className="px-4 py-3 text-sm text-right font-semibold tabular-nums whitespace-nowrap"
-                      style={{ color: isCredit ? '#4ADE80' : '#F1F5F9' }}
-                    >
-                      {isCredit ? '+' : '-'}¥{Math.round(parseFloat(tx.amount)).toLocaleString()}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span
+                          className="w-5 h-5 rounded-full flex items-center justify-center"
+                          style={{ backgroundColor: isCredit ? '#4ADE8020' : '#F8717120' }}
+                        >
+                          {isCredit
+                            ? <ArrowDownLeft size={11} color="#4ADE80" />
+                            : <ArrowUpRight size={11} color="#F87171" />}
+                        </span>
+                        <span
+                          className="text-sm font-semibold tabular-nums"
+                          style={{ color: isCredit ? '#4ADE80' : '#F87171' }}
+                        >
+                          {isCredit ? '+' : '-'}¥{Math.round(parseFloat(tx.amount)).toLocaleString()}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span
