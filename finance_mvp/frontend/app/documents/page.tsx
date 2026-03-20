@@ -6,9 +6,12 @@ import Link from "next/link";
 import DocumentsTable from "@/components/documents-table";
 import DocumentsUploadForm from "@/components/documents-upload-form";
 import {
+  bulkDeleteDocuments,
+  deleteDocument,
   fetchDocuments,
   fetchEntities,
   fetchReviewQueue,
+  reclassifyTransactions,
   retryDocumentParse,
   type DocumentItem,
   type ImportSourceType,
@@ -35,6 +38,9 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [retryingDocumentId, setRetryingDocumentId] = useState<string | null>(null);
   const [updatingTypeDocumentId, setUpdatingTypeDocumentId] = useState<string | null>(null);
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isReclassifying, setIsReclassifying] = useState(false);
 
   const load = async (eid?: string) => {
     setLoading(true);
@@ -87,6 +93,43 @@ export default function DocumentsPage() {
     setUpdatingTypeDocumentId(null);
     if (result.error) {
       setError(result.error || "Failed to update type hint");
+      return;
+    }
+    await load(entityId);
+  };
+
+  const handleDeleteDocument = async (documentId: string) => {
+    setDeletingDocumentId(documentId);
+    setError(null);
+    const result = await deleteDocument(documentId, entityId);
+    setDeletingDocumentId(null);
+    if (result.error) {
+      setError(result.error || "Failed to delete uploaded document");
+      return;
+    }
+    await load(entityId);
+  };
+
+  const handleBulkDeleteDocuments = async (documentIds: string[]) => {
+    if (!documentIds.length) return;
+    setIsBulkDeleting(true);
+    setError(null);
+    const result = await bulkDeleteDocuments(documentIds, entityId);
+    setIsBulkDeleting(false);
+    if (result.error) {
+      setError(result.error || "Failed to bulk delete uploaded documents");
+      return;
+    }
+    await load(entityId);
+  };
+
+  const handleReclassify = async () => {
+    setIsReclassifying(true);
+    setError(null);
+    const result = await reclassifyTransactions(entityId);
+    setIsReclassifying(false);
+    if (result.error) {
+      setError(result.error || "Failed to reclassify transactions");
       return;
     }
     await load(entityId);
@@ -234,6 +277,15 @@ export default function DocumentsPage() {
           className="input"
           style={{ maxWidth: 260, marginLeft: "auto" }}
         />
+        <button
+          type="button"
+          className="btn secondary"
+          onClick={handleReclassify}
+          disabled={isReclassifying}
+          style={{ whiteSpace: "nowrap" }}
+        >
+          {isReclassifying ? "Reclassifying..." : "Reclassify Existing Transactions"}
+        </button>
       </div>
 
       {/* Error */}
@@ -265,8 +317,12 @@ export default function DocumentsPage() {
           minConfidence={minConfidence}
           onRetryParse={handleRetryParse}
           onMarkType={handleMarkType}
+          onDeleteDocument={handleDeleteDocument}
+          onBulkDelete={handleBulkDeleteDocuments}
           retryingDocumentId={retryingDocumentId}
           updatingTypeDocumentId={updatingTypeDocumentId}
+          deletingDocumentId={deletingDocumentId}
+          isBulkDeleting={isBulkDeleting}
         />
       )}
     </div>

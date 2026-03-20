@@ -61,6 +61,19 @@ export type TransactionItem = {
   created_at: string;
 };
 
+export type TransactionCategoryOption = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+export type TransactionUpdatePayload = {
+  category_id?: string | null;
+  notes?: string | null;
+  is_ignored?: boolean;
+  receipt_id?: string | null;
+};
+
 export type DocumentItem = {
   id: string;
   entity_id: string;
@@ -124,12 +137,15 @@ export type ImportSourceType =
   | "wallet_screenshot"
   | "email_receipt";
 
+export type UploadSourceSelection = ImportSourceType | "auto";
+
 export type ImportJob = {
   id: string;
   entity_id: string;
   source_type: ImportSourceType;
   status: "pending" | "processing" | "completed" | "failed";
   file_name: string;
+  metadata_json?: Record<string, unknown>;
   error_message: string | null;
   created_at: string;
   processed_at: string | null;
@@ -225,6 +241,36 @@ export async function fetchTransactions(entityId?: string, year?: number, month?
   return requestJson<TransactionItem[]>(`/transactions${query}`, undefined, { entityId });
 }
 
+export async function fetchTransactionCategories(entityId?: string): Promise<ApiResult<TransactionCategoryOption[]>> {
+  return requestJson<TransactionCategoryOption[]>("/transactions/categories", undefined, { entityId });
+}
+
+export async function updateTransaction(
+  transactionId: string,
+  payload: TransactionUpdatePayload,
+  entityId?: string,
+): Promise<ApiResult<TransactionItem>> {
+  return requestJson<TransactionItem>(
+    `/transactions/${encodeURIComponent(transactionId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    { entityId },
+  );
+}
+
+export async function reclassifyTransactions(entityId?: string): Promise<ApiResult<{ updated_categories: number; newly_ignored_rows: number; scanned_rows: number }>> {
+  return requestJson<{ updated_categories: number; newly_ignored_rows: number; scanned_rows: number }>(
+    "/transactions/reclassify",
+    {
+      method: "POST",
+    },
+    { entityId },
+  );
+}
+
 export async function fetchDocuments(entityId?: string): Promise<ApiResult<DocumentItem[]>> {
   return requestJson<DocumentItem[]>("/documents", undefined, { entityId });
 }
@@ -315,12 +361,16 @@ export async function fetchLearningFeedback(entityId?: string): Promise<ApiResul
 
 export async function uploadDocument(
   file: File,
-  sourceType: ImportSourceType,
+  sourceType: UploadSourceSelection,
   entityId?: string,
 ): Promise<ApiResult<ImportJob>> {
   const form = new FormData();
   form.set("file", file);
-  const path = `/imports/upload?source_type=${encodeURIComponent(sourceType)}`;
+  const query =
+    sourceType && sourceType !== "auto"
+      ? `?source_type=${encodeURIComponent(sourceType)}`
+      : "";
+  const path = `/imports/upload${query}`;
   const url = `${resolveApiBaseUrl()}${path}`;
 
   try {
@@ -341,6 +391,45 @@ export async function uploadDocument(
     const message = error instanceof Error ? error.message : "Upload failed";
     return { data: null, error: message, status: null };
   }
+}
+
+export async function deleteDocument(
+  documentId: string,
+  entityId?: string,
+): Promise<ApiResult<null>> {
+  const url = `${resolveApiBaseUrl()}/documents/${encodeURIComponent(documentId)}`;
+  try {
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: entityHeaders(entityId),
+    });
+    if (!response.ok) {
+      const errorMessage = await parseErrorMessage(response);
+      return { data: null, error: errorMessage, status: response.status };
+    }
+    return { data: null, error: null, status: response.status };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Delete failed";
+    return { data: null, error: message, status: null };
+  }
+}
+
+export async function bulkDeleteDocuments(
+  documentIds: string[],
+  entityId?: string,
+): Promise<ApiResult<{ deleted_count: number }>> {
+  if (!documentIds.length) {
+    return { data: { deleted_count: 0 }, error: null, status: 200 };
+  }
+  return requestJson<{ deleted_count: number }>(
+    "/documents/bulk-delete",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document_ids: documentIds }),
+    },
+    { entityId },
+  );
 }
 
 export async function downloadAccountingCsv(entityId?: string): Promise<ApiResult<Blob>> {

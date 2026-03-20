@@ -11,10 +11,13 @@ import DocumentTypeBadge from "./DocumentTypeBadge";
 type Props = {
   doc: DocumentItem;
   onClose: () => void;
+  colSpan?: number;
   onRetryParse?: () => Promise<void>;
   onMarkType?: (sourceType: ImportSourceType) => Promise<void>;
+  onDeleteDocument?: () => Promise<void>;
   isRetrying?: boolean;
   isUpdatingType?: boolean;
+  isDeleting?: boolean;
 };
 
 const TYPE_OPTIONS: ImportSourceType[] = [
@@ -33,10 +36,13 @@ const TYPE_OPTIONS: ImportSourceType[] = [
 export default function DocumentReviewDrawer({
   doc,
   onClose,
+  colSpan = 10,
   onRetryParse,
   onMarkType,
+  onDeleteDocument,
   isRetrying,
   isUpdatingType,
+  isDeleting,
 }: Props) {
   const [selectedType, setSelectedType] = useState<ImportSourceType>(
     (doc.source_type_hint as ImportSourceType) || "financial_document",
@@ -47,7 +53,7 @@ export default function DocumentReviewDrawer({
 
   return (
     <tr>
-      <td colSpan={10} style={{ padding: 0 }}>
+      <td colSpan={colSpan} style={{ padding: 0 }}>
         <div
           style={{
             background: "#f8fafc",
@@ -189,6 +195,31 @@ export default function DocumentReviewDrawer({
                     {isUpdatingType ? "Saving..." : "Mark Correct Type"}
                   </button>
                 </>
+              )}
+              {onDeleteDocument && (
+                <button
+                  onClick={async () => {
+                    const confirmed = window.confirm(
+                      "Delete this upload and related extracted data? This cannot be undone.",
+                    );
+                    if (!confirmed) return;
+                    await onDeleteDocument();
+                    onClose();
+                  }}
+                  disabled={isDeleting}
+                  style={{
+                    background: "#fef2f2",
+                    border: "1px solid #fca5a5",
+                    borderRadius: 6,
+                    padding: "6px 10px",
+                    cursor: isDeleting ? "not-allowed" : "pointer",
+                    fontSize: 12,
+                    color: "#b91c1c",
+                    fontWeight: 700,
+                  }}
+                >
+                  {isDeleting ? "Deleting..." : "Delete Upload"}
+                </button>
               )}
               <button
                 onClick={onClose}

@@ -13,14 +13,17 @@ from app.models.review_queue import ReviewQueueItem
 from app.models.transaction import Transaction
 from app.services.analytics.review_queue_rules import derive_review_reason
 from app.services.categorization.engine import categorize_transaction
-from app.services.dedupe.duplicate_detector import find_duplicate_by_fingerprint
+from app.services.dedupe.duplicate_detector import find_duplicate_by_fingerprint, find_duplicate_by_cross_source
 from app.services.document_intelligence.pipeline import analyze_financial_document
 from app.services.matching.receipt_transaction_matcher import match_receipt_to_transactions
 from app.services.matching.document_cross_validator import cross_validate_document_with_transactions
 from app.services.normalization.merchant_normalizer import normalize_merchant
 from app.services.parsers.csv_statement_parser import parse_csv_statement
 from app.services.parsers.ofx_parser import parse_ofx_statement
-from app.services.parsers.pdf_statement_parser import parse_pdf_statement_with_diagnostics
+from app.services.parsers.pdf_statement_parser import (
+    parse_pdf_statement_with_diagnostics,
+    parse_statement_text_with_diagnostics,
+)
 from app.services.parsers.receipt_ocr import extract_text, parse_receipt
 from app.utils.fingerprint import transaction_fingerprint
 
@@ -78,18 +81,27 @@ def process_import(
         file_path = Path(local_file_path)
         suffix = file_path.suffix.lower()
 
+        existing_document = db.scalar(
+            select(FinancialDocument).where(FinancialDocument.import_id == job.id)
+        )
+        preserved_raw_text = (
+            existing_document.raw_text if existing_document and existing_document.raw_text else ""
+        )
+
         document_text = ""
         if suffix in {".pdf", ".png", ".jpg", ".jpeg", ".webp"}:
             document_text = extract_text(local_file_path)
         elif suffix in {".csv", ".ofx", ".qfx"}:
             document_text = f"statement file {job.file_name}"
 
+        # Reparse may happen after a restart where the original uploaded file is
+        # no longer available on ephemeral disk. Keep prior extracted text so
+        # statement parsing still has data to work with.
+        if not document_text and preserved_raw_text:
+            document_text = preserved_raw_text
+
         source_hint = job.source_type.value if job.source_type else None
         intelligence = analyze_financial_document(document_text, job.file_name, source_type_hint=source_hint)
-
-        existing_document = db.scalar(
-            select(FinancialDocument).where(FinancialDocument.import_id == job.id)
-        )
 
         if existing_document and not force_reprocess and existing_document.parsing_status in {
             "parsed",
@@ -122,7 +134,7 @@ def process_import(
             document.reimbursable_candidate = intelligence.reimbursable_candidate
             document.tax_relevant_candidate = intelligence.tax_relevant_candidate
             document.retention_recommended = intelligence.retention_recommended
-            document.merchant_name = intelligence.merchant_name
+            document.merchant_name = intelligence.merchant_name or document.merchant_name
             document.merchant_address = intelligence.merchant_address
             document.purchase_date = intelligence.purchase_date
             document.invoice_date = intelligence.invoice_date
@@ -135,11 +147,18 @@ def process_import(
             document.invoice_number = intelligence.invoice_number
             document.order_number = intelligence.order_number
             document.line_items = intelligence.line_items
-            document.raw_text = intelligence.raw_text
-            document.extraction_confidence = intelligence.extraction_confidence
-            document.likely_issuer = intelligence.likely_issuer
-            document.source_type_hint = intelligence.source_type_hint
-            document.raw_text_preview = intelligence.raw_text_preview
+            if intelligence.raw_text:
+                document.raw_text = intelligence.raw_text
+            document.extraction_confidence = max(
+                document.extraction_confidence or 0.0,
+                intelligence.extraction_confidence or 0.0,
+            )
+            document.likely_issuer = intelligence.likely_issuer or document.likely_issuer
+            document.source_type_hint = intelligence.source_type_hint or document.source_type_hint
+            if intelligence.raw_text_preview:
+                document.raw_text_preview = intelligence.raw_text_preview
+            elif document.raw_text:
+                document.raw_text_preview = document.raw_text[:4000]
             document.parsing_status = "pending"
             document.parsing_failure_reason = None
             document.review_required = False
@@ -229,6 +248,17 @@ def process_import(
                     local_file_path,
                     source=source,
                 )
+                # Fallback: some statement PDFs have a text layer that is valid,
+                # but table word coordinates are too noisy for layout extraction.
+                if not parsed_transactions and (document.raw_text or "").strip():
+                    fallback_transactions, fallback_diagnostics = parse_statement_text_with_diagnostics(
+                        document.raw_text,
+                        source=source,
+                    )
+                    if fallback_transactions:
+                        parsed_transactions = fallback_transactions
+                        statement_diagnostics = fallback_diagnostics
+                        parser_name = "pdf_statement_parser_raw_text_fallback"
                 parser_confidence = statement_diagnostics.parser_confidence
                 summary_without_detail = (
                     statement_diagnostics.summary_section_hits > 0
@@ -260,7 +290,12 @@ def process_import(
             extracted_amount_total = Decimal("0")
             for item in parsed_transactions:
                 merchant_normalized = normalize_merchant(item.merchant_raw)
-                category_result = categorize_transaction(item.merchant_raw, item.description)
+                category_result = categorize_transaction(
+                    merchant_normalized,
+                    item.description,
+                    direction=item.direction,
+                    source=item.source,
+                )
                 category = _get_or_create_category(db, job.entity_id, category_result.category)
                 fingerprint = transaction_fingerprint(
                     item.transaction_date,
@@ -270,7 +305,25 @@ def process_import(
                     item.source,
                 )
 
-                duplicate = find_duplicate_by_fingerprint(db, job.entity_id, fingerprint)
+                duplicate = None
+                if item.external_txn_id:
+                    duplicate = db.scalar(
+                        select(Transaction).where(
+                            Transaction.entity_id == job.entity_id,
+                            Transaction.external_txn_id == item.external_txn_id,
+                        )
+                    )
+                if duplicate is None:
+                    duplicate = find_duplicate_by_fingerprint(db, job.entity_id, fingerprint)
+                if duplicate is None:
+                    duplicate = find_duplicate_by_cross_source(
+                        db,
+                        job.entity_id,
+                        item.transaction_date,
+                        item.amount,
+                        item.source,
+                        item.description,
+                    )
                 if duplicate:
                     if duplicate.import_id == job.id:
                         same_import_existing_count += 1
@@ -367,6 +420,7 @@ def process_import(
                 )
 
             job.metadata_json = {
+                **(job.metadata_json or {}),
                 "created_transactions": created_count,
                 "duplicate_transactions": duplicate_count,
                 "same_import_existing_transactions": same_import_existing_count,
@@ -418,6 +472,7 @@ def process_import(
                 document.parsing_failure_reason = "Could not extract total amount from receipt"
 
             job.metadata_json = {
+                **(job.metadata_json or {}),
                 "ocr_confidence": parsed_receipt.confidence,
                 "matched_transaction": str(match.transaction_id) if match else None,
                 "document_type": document.document_type.value,

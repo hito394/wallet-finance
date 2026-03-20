@@ -34,3 +34,17 @@ class TransactionUpdate(BaseModel):
     receipt_id: uuid.UUID | None = None
     notes: str | None = None
     is_ignored: bool | None = None
+
+
+class ReclassifyTransactionsResponse(BaseModel):
+    updated_categories: int
+    newly_ignored_rows: int
+    scanned_rows: int
+
+
+class TransactionCategoryRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+
+    model_config = {"from_attributes": True}

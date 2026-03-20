@@ -65,7 +65,8 @@ a {
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 30;
+  z-index: 2147483647;
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -74,6 +75,19 @@ a {
   background: rgba(238, 243, 246, 0.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(212, 222, 230, 0.7);
+}
+
+.topbar,
+.topbar * {
+  pointer-events: auto;
+}
+
+.topnav,
+.topnav-link,
+.mobile-nav,
+.mobile-nav-link {
+  position: relative;
+  z-index: 2147483647;
 }
 
 .topbar-left {
@@ -134,6 +148,8 @@ a {
 }
 
 .app-content {
+  position: relative;
+  z-index: 1;
   max-width: 1200px;
   margin: 0 auto;
   padding: 24px;

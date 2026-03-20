@@ -46,11 +46,20 @@ from app.utils.fingerprint import transaction_fingerprint
 
 log = logging.getLogger(__name__)
 
-_ENV_MAP = {
-    "sandbox":     plaid.Environment.Sandbox,
-    "development": plaid.Environment.Development,
-    "production":  plaid.Environment.Production,
-}
+def _resolve_plaid_host(env_name: str):
+    """Resolve Plaid API host across SDK versions (with/without Development)."""
+    env = (env_name or "sandbox").strip().lower()
+    env_cls = plaid.Environment
+
+    sandbox = getattr(env_cls, "Sandbox", getattr(env_cls, "sandbox", "https://sandbox.plaid.com"))
+    development = getattr(env_cls, "Development", getattr(env_cls, "development", sandbox))
+    production = getattr(env_cls, "Production", getattr(env_cls, "production", "https://production.plaid.com"))
+
+    return {
+        "sandbox": sandbox,
+        "development": development,
+        "production": production,
+    }.get(env, sandbox)
 
 
 def _get_client() -> plaid_api.PlaidApi:
@@ -59,7 +68,7 @@ def _get_client() -> plaid_api.PlaidApi:
             "Plaid credentials are not configured. "
             "Set PLAID_CLIENT_ID and PLAID_SECRET environment variables."
         )
-    host = _ENV_MAP.get(settings.plaid_env, plaid.Environment.Sandbox)
+    host = _resolve_plaid_host(settings.plaid_env)
     configuration = Configuration(
         host=host,
         api_key={"clientId": settings.plaid_client_id, "secret": settings.plaid_secret},
@@ -258,6 +267,8 @@ def _upsert_plaid_transaction(db: Session, tx_data: dict, item: PlaidItem, entit
     cat_result = categorize_transaction(
         merchant_raw=merchant_norm,
         description=description,
+        direction=direction.value,
+        source="bank",
     )
     cat_slug = cat_result.category.lower().replace(" ", "-")
     db_category = db.scalar(select(Category).where(

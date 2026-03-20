@@ -71,6 +71,33 @@ SUMMARY_LINE_KEYWORDS = {
 
 ACCOUNT_NUMBER_PATTERN = re.compile(r"\b(?:acct|account)\b.*\b\d{4,}\b", re.IGNORECASE)
 ACCOUNT_LIKE_FRAGMENT_PATTERN = re.compile(r"^[#*xX\-\s\d]{6,}$")
+_CREDIT_HINTS = (
+    "salary",
+    "payroll",
+    "deposit",
+    "refund",
+    "interest",
+    "direct dep",
+    "ach credit",
+    "transfer in",
+    "zelle credit",
+    "入金",
+    "給与",
+)
+_DEBIT_HINTS = (
+    "withdraw",
+    "debit",
+    "purchase",
+    "charge",
+    "fee",
+    "payment",
+    "transfer out",
+    "ach debit",
+    "atm",
+    "zelle debit",
+    "引落",
+    "出金",
+)
 
 
 @dataclass
@@ -82,6 +109,34 @@ class StatementParseDiagnostics:
     skipped_summary_pages: int = 0
     matched_rows: int = 0
     suspicious_account_number_rows: int = 0
+
+
+def _dedupe_scored_rows(scored_rows: list[tuple[int, ParsedTransaction]]) -> list[ParsedTransaction]:
+    parsed: list[ParsedTransaction] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for _, tx in scored_rows:
+        key = (
+            tx.transaction_date.isoformat(),
+            tx.description,
+            str(tx.amount),
+            tx.direction,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        parsed.append(tx)
+    return parsed
+
+
+def _set_parser_confidence(parsed: list[ParsedTransaction], diagnostics: StatementParseDiagnostics) -> None:
+    if not parsed:
+        diagnostics.parser_confidence = 0.15 if diagnostics.summary_section_hits > 0 else 0.05
+    elif diagnostics.detail_section_hits > 0:
+        diagnostics.parser_confidence = 0.92
+    elif diagnostics.suspicious_account_number_rows > 0:
+        diagnostics.parser_confidence = 0.55
+    else:
+        diagnostics.parser_confidence = 0.75
 
 
 def _try_parse_date(raw: str):
@@ -169,6 +224,53 @@ def _should_skip_line(line_upper: str) -> bool:
     return any(keyword in line_upper for keyword in SUMMARY_LINE_KEYWORDS)
 
 
+def _split_compound_transaction_line(line: str) -> list[str]:
+    """Split a line that may contain multiple transaction rows.
+
+    Some OCR outputs collapse multiple statement rows into one physical line:
+    "MM/DD ... amount balance MM/DD ... amount balance".
+    We only split at date tokens when the preceding chunk already ends with an
+    amount token, which avoids breaking posted-date fragments inside a single
+    transaction description.
+    """
+    normalized = re.sub(r"\s+", " ", (line or "").strip())
+    if not normalized:
+        return []
+
+    # Only date-prefixed rows are candidates for transaction splitting.
+    if not DATE_PREFIX_PATTERN.match(normalized):
+        return [normalized]
+
+    date_start_pattern = re.compile(rf"(?<!\d)(?:{DATE_PATTERN})(?=\s)")
+    starts = [m.start() for m in date_start_pattern.finditer(normalized)]
+    if len(starts) <= 1:
+        return [normalized]
+
+    chunks: list[str] = []
+    split_at = 0
+    for candidate_start in starts[1:]:
+        segment = normalized[split_at:candidate_start].strip()
+        if not segment:
+            continue
+
+        amount_matches = list(AMOUNT_TOKEN_PATTERN.finditer(segment))
+        # Split only when the previous segment appears complete.
+        if not amount_matches:
+            continue
+        tail = segment[amount_matches[-1].end() :].strip()
+        if tail:
+            continue
+
+        chunks.append(segment)
+        split_at = candidate_start
+
+    remainder = normalized[split_at:].strip()
+    if remainder:
+        chunks.append(remainder)
+
+    return chunks or [normalized]
+
+
 def _parse_transaction_line(
     line: str,
     *,
@@ -210,19 +312,6 @@ def _parse_transaction_line(
             if parsed_balance:
                 running_balance = parsed_balance[0]
 
-    # Determine transaction direction:
-    # 1. If we know the section type (deposits vs withdrawals), trust that first.
-    # 2. For bank statements with signed amounts: negative = outgoing (debit/expense),
-    #    positive = incoming (credit/income).  This is the opposite of the raw credit-card
-    #    convention used inside _parse_amount_token.
-    # 3. For credit cards: keep raw convention (negative/CR → credit, positive → debit).
-    if section_direction is not None:
-        direction = section_direction
-    elif source == "bank":
-        direction = "debit" if is_negative else "credit"
-    else:
-        direction = raw_direction
-
     description = re.sub(r"\s+", " ", rest[: amount_match.start()].strip(" -\t"))
     if len(description) < 3:
         return None
@@ -230,6 +319,27 @@ def _parse_transaction_line(
     if _looks_like_account_number_fragment(description):
         diagnostics.suspicious_account_number_rows += 1
         return None
+
+    lower_desc = description.lower()
+    # Determine transaction direction:
+    # 1) Section context is strongest when available.
+    # 2) Description hints override ambiguous numeric sign conventions.
+    # 3) Bank default is debit (spend) for unsigned rows; card follows raw sign/CR.
+    if section_direction is not None:
+        direction = section_direction
+    elif any(hint in lower_desc for hint in _CREDIT_HINTS):
+        direction = "credit"
+    elif any(hint in lower_desc for hint in _DEBIT_HINTS):
+        direction = "debit"
+    elif source == "bank":
+        if is_negative:
+            direction = "debit"
+        elif raw_direction == "credit":
+            direction = "credit"
+        else:
+            direction = "debit"
+    else:
+        direction = raw_direction
 
     return ParsedTransaction(
         transaction_date=tx_date,
@@ -355,6 +465,12 @@ def parse_pdf_statement_with_diagnostics(
                         continue
                     if _has_section_title(raw_line, SUMMARY_SECTION_TITLES):
                         diagnostics.summary_section_hits += 1
+                        # Detail tables often include balance marker lines
+                        # (e.g. "Beginning Balance") inside transaction detail.
+                        # Keep detail context so subsequent dated rows are not
+                        # downgraded as summary-only rows.
+                        if in_detail_section:
+                            continue
                         in_summary_section = True
                         in_detail_section = False
                         section_direction = None
@@ -363,52 +479,110 @@ def parse_pdf_statement_with_diagnostics(
                     if ACCOUNT_NUMBER_PATTERN.search(raw_line):
                         diagnostics.suspicious_account_number_rows += 1
 
-                    tx = _parse_transaction_line(
-                        raw_line,
-                        source=source,
-                        diagnostics=diagnostics,
-                        section_direction=section_direction,
-                    )
-                    if tx is None:
-                        continue
+                    candidate_lines = _split_compound_transaction_line(raw_line)
+                    for candidate in candidate_lines:
+                        tx = _parse_transaction_line(
+                            candidate,
+                            source=source,
+                            diagnostics=diagnostics,
+                            section_direction=section_direction,
+                        )
+                        if tx is None:
+                            continue
 
-                    score = 1
-                    if in_detail_section:
-                        score += 2
-                    if in_summary_section:
-                        score -= 2
-                    if issuer == "chase" and tx.posted_date is not None:
-                        score += 1
+                        score = 1
+                        if in_detail_section:
+                            score += 2
+                        if in_summary_section:
+                            score -= 2
+                        if issuer == "chase" and tx.posted_date is not None:
+                            score += 1
 
-                    if score >= 1:
-                        diagnostics.matched_rows += 1
-                        scored_rows.append((score, tx))
+                        if score >= 1:
+                            diagnostics.matched_rows += 1
+                            scored_rows.append((score, tx))
 
     except Exception:
         return [], StatementParseDiagnostics(issuer="unknown")
 
-    parsed: list[ParsedTransaction] = []
-    seen: set[tuple[str, str, str, str]] = set()
-    for _, tx in scored_rows:
-        key = (
-            tx.transaction_date.isoformat(),
-            tx.description,
-            str(tx.amount),
-            tx.direction,
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        parsed.append(tx)
+    parsed = _dedupe_scored_rows(scored_rows)
+    if not parsed and issuer_text.strip():
+        fallback_parsed, fallback_diagnostics = parse_statement_text_with_diagnostics(issuer_text, source)
+        if fallback_parsed:
+            return fallback_parsed, fallback_diagnostics
+    _set_parser_confidence(parsed, diagnostics)
 
-    if not parsed:
-        diagnostics.parser_confidence = 0.15 if diagnostics.summary_section_hits > 0 else 0.05
-    elif diagnostics.detail_section_hits > 0:
-        diagnostics.parser_confidence = 0.92
-    elif diagnostics.suspicious_account_number_rows > 0:
-        diagnostics.parser_confidence = 0.55
-    else:
-        diagnostics.parser_confidence = 0.75
+    return parsed, diagnostics
+
+
+def parse_statement_text_with_diagnostics(
+    text: str,
+    source: str,
+) -> tuple[list[ParsedTransaction], StatementParseDiagnostics]:
+    issuer = _detect_issuer(text)
+    diagnostics = StatementParseDiagnostics(issuer=issuer)
+    scored_rows: list[tuple[int, ParsedTransaction]] = []
+
+    in_detail_section = False
+    in_summary_section = False
+    section_direction: str | None = None
+
+    for raw_line in text.splitlines():
+        normalized_line = re.sub(r"\s+", " ", (raw_line or "").strip())
+        if not normalized_line:
+            continue
+
+        if _has_section_title(normalized_line, DETAIL_SECTION_TITLES):
+            diagnostics.detail_section_hits += 1
+            in_detail_section = True
+            in_summary_section = False
+            if _has_section_title(normalized_line, CREDIT_SECTION_TITLES):
+                section_direction = "credit"
+            elif _has_section_title(normalized_line, DEBIT_SECTION_TITLES):
+                section_direction = "debit"
+            else:
+                section_direction = None
+            continue
+
+        if _has_section_title(normalized_line, SUMMARY_SECTION_TITLES):
+            diagnostics.summary_section_hits += 1
+            # Do not break out of detail mode for balance marker lines that
+            # appear inside the transaction detail block.
+            if in_detail_section:
+                continue
+            in_summary_section = True
+            in_detail_section = False
+            section_direction = None
+            continue
+
+        if ACCOUNT_NUMBER_PATTERN.search(normalized_line):
+            diagnostics.suspicious_account_number_rows += 1
+
+        candidate_lines = _split_compound_transaction_line(normalized_line)
+        for candidate in candidate_lines:
+            tx = _parse_transaction_line(
+                candidate,
+                source=source,
+                diagnostics=diagnostics,
+                section_direction=section_direction,
+            )
+            if tx is None:
+                continue
+
+            score = 1
+            if in_detail_section:
+                score += 2
+            if in_summary_section:
+                score -= 2
+            if issuer == "chase" and tx.posted_date is not None:
+                score += 1
+
+            if score >= 1:
+                diagnostics.matched_rows += 1
+                scored_rows.append((score, tx))
+
+    parsed = _dedupe_scored_rows(scored_rows)
+    _set_parser_confidence(parsed, diagnostics)
 
     return parsed, diagnostics
 

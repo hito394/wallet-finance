@@ -9,6 +9,7 @@ import {
   fetchDocumentsByImportId,
   type DocumentItem,
   type ImportSourceType,
+  type UploadSourceSelection,
 } from "@/lib/api";
 import StatusMessage from "@/components/status-message";
 import UploadResultCard from "@/components/documents/UploadResultCard";
@@ -27,6 +28,11 @@ const SOURCE_TYPE_LABELS: Record<ImportSourceType, string> = {
 };
 
 const SOURCE_TYPES = Object.keys(SOURCE_TYPE_LABELS) as ImportSourceType[];
+const SOURCE_SELECTIONS: UploadSourceSelection[] = ["auto", ...SOURCE_TYPES];
+const SOURCE_SELECTION_LABELS: Record<UploadSourceSelection, string> = {
+  auto: "Auto Detect",
+  ...SOURCE_TYPE_LABELS,
+};
 
 type Props = {
   entityId?: string;
@@ -36,9 +42,10 @@ type Props = {
 export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
-  const [sourceType, setSourceType] = useState<ImportSourceType>("bank_statement");
+  const [sourceType, setSourceType] = useState<UploadSourceSelection>("auto");
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [processedDoc, setProcessedDoc] = useState<DocumentItem | null>(null);
 
   const canSubmit = useMemo(() => !!file && !isUploading, [file, isUploading]);
@@ -47,8 +54,8 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
     <div className="panel form-panel">
       <h3>Upload Financial Document</h3>
       <p className="muted">
-        Choose a source type, then upload a receipt, invoice, or statement. The AI pipeline will
-        classify, extract, and tag the document automatically.
+        Upload a receipt, invoice, or statement. Source type is auto-detected by default,
+        and you can still override it manually when needed.
       </p>
 
       <div className="form-grid">
@@ -57,11 +64,11 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
           <select
             className="input"
             value={sourceType}
-            onChange={(event) => setSourceType(event.target.value as ImportSourceType)}
+            onChange={(event) => setSourceType(event.target.value as UploadSourceSelection)}
           >
-            {SOURCE_TYPES.map((type) => (
+            {SOURCE_SELECTIONS.map((type) => (
               <option value={type} key={type}>
-                {SOURCE_TYPE_LABELS[type]}
+                {SOURCE_SELECTION_LABELS[type]}
               </option>
             ))}
           </select>
@@ -76,8 +83,9 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
               setFile(event.target.files?.[0] || null);
               setProcessedDoc(null);
               setError(null);
+              setInfo(null);
             }}
-            accept=".pdf,.csv,.png,.jpg,.jpeg"
+            accept=".pdf,.csv,.png,.jpg,.jpeg,.webp,.ofx,.qfx"
           />
         </div>
       </div>
@@ -91,6 +99,7 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
             if (!file) return;
             setIsUploading(true);
             setError(null);
+            setInfo(null);
             setProcessedDoc(null);
 
             // Step 1: upload → get import job ID
@@ -99,6 +108,16 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
               setIsUploading(false);
               setError(uploadResult.error || "Upload failed");
               return;
+            }
+
+            const reused = uploadResult.data.metadata_json?.idempotent_reuse === true;
+            if (reused) {
+              const originalName = uploadResult.data.file_name;
+              setInfo(
+                originalName && originalName !== file.name
+                  ? `Duplicate content detected. Reused existing upload: ${originalName}.`
+                  : "Duplicate content detected. Reused existing upload result.",
+              );
             }
 
             const jobId = uploadResult.data.id;
@@ -128,6 +147,10 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
 
       {error && (
         <StatusMessage tone="error" title="Upload failed" detail={error} />
+      )}
+
+      {info && (
+        <StatusMessage tone="info" title="Upload reused existing result" detail={info} />
       )}
 
       {processedDoc && (

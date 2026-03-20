@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from app.models.document import FinancialDocumentType, PaymentStatus
 from app.models.import_job import ImportSourceType
@@ -63,3 +63,11 @@ class DocumentTypeHintUpdate(BaseModel):
 class ReparseDocumentResponse(BaseModel):
     import_id: uuid.UUID
     status: str
+
+
+class BulkDeleteDocumentsRequest(BaseModel):
+    document_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+
+
+class BulkDeleteDocumentsResponse(BaseModel):
+    deleted_count: int
