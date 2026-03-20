@@ -78,7 +78,7 @@ function loadConfig(): WidgetConfig {
     if (raw) {
       const p = JSON.parse(raw) as WidgetConfig;
       if (Array.isArray(p.order) && Array.isArray(p.hidden)) {
-        return { sizes: {}, ...p };
+        return { ...p, sizes: p.sizes ?? {} };
       }
     }
   } catch { /* ignore */ }
