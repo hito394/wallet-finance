@@ -17,6 +17,32 @@ def find_duplicate_by_fingerprint(db: Session, entity_id, fingerprint: str) -> T
     )
 
 
+def find_duplicate_by_date_amount_direction(
+    db: Session,
+    entity_id,
+    transaction_date: date,
+    amount: Decimal,
+    direction: TransactionDirection,
+    current_import_id,
+) -> Transaction | None:
+    """
+    Fallback dedup: same date + absolute amount + direction from a different import.
+
+    Used when fingerprint doesn't match due to merchant name or description
+    differences between two imports of the same underlying transaction.
+    """
+    return db.scalar(
+        select(Transaction).where(
+            Transaction.entity_id == entity_id,
+            Transaction.transaction_date == transaction_date,
+            func.abs(Transaction.amount) == abs(amount),
+            Transaction.direction == direction,
+            Transaction.import_id != current_import_id,
+            Transaction.is_ignored.is_(False),
+        )
+    )
+
+
 def find_duplicate_by_cross_source(
     db: Session,
     entity_id,
@@ -27,20 +53,24 @@ def find_duplicate_by_cross_source(
 ) -> Transaction | None:
     """
     Detect cross-source duplicates: same transaction from different accounts.
-    
+
     Example: A payment of $4499 from checking account (bank source) that appears
     as a payment on a credit card statement (card source) on the same date.
-    
+
     Both transactions would have:
     - Same transaction_date
     - Same absolute amount
     - Different source (bank vs card)
     - Similar descriptions (both payment-related)
-    
+
     Returns the existing transaction if a match is found, otherwise None.
     """
-    # Keywords that typically indicate transfers/payments between accounts
-    payment_keywords = {"payment", "transfer", "online payment", "pay", "sent", "wire"}
+    # Keywords that typically indicate transfers/payments between accounts (EN + JA)
+    payment_keywords = {
+        "payment", "transfer", "online payment", "pay", "sent", "wire",
+        "引き落とし", "支払", "お支払", "振込", "自動振替", "口座振替",
+        "カード", "クレジット", "ご利用代金", "クレカ",
+    }
     desc_lower = description.lower()
     is_payment_like = any(kw in desc_lower for kw in payment_keywords)
 
@@ -94,7 +124,11 @@ def scan_cross_source_payments(db: Session, entity_id) -> int:
 
     Returns the count of transactions newly marked ignored.
     """
-    payment_patterns = ["%payment%", "%pymt%", "%autopay%", "%auto pay%", "%thank you%"]
+    payment_patterns = [
+        "%payment%", "%pymt%", "%autopay%", "%auto pay%", "%thank you%",
+        "%引き落とし%", "%支払%", "%お支払%", "%振込%", "%自動振替%", "%口座振替%",
+        "%クレジット%", "%ご利用代金%", "%クレカ%",
+    ]
 
     cc_credits = db.scalars(
         select(Transaction).where(
