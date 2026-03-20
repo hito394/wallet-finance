@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models.transaction import Transaction, TransactionSource
+from app.models.transaction import Transaction, TransactionDirection, TransactionSource
 
 
 def find_duplicate_by_fingerprint(db: Session, entity_id, fingerprint: str) -> Transaction | None:
@@ -80,3 +80,52 @@ def find_duplicate_by_cross_source(
         )
         .order_by(Transaction.created_at.asc())
     )
+
+
+def scan_cross_source_payments(db: Session, entity_id) -> int:
+    """
+    Retroactively find and mark cross-source credit card payment credits as ignored.
+
+    When bank + credit card statements are both uploaded, the bank shows a single
+    "CREDIT CARD PAYMENT $X" debit and the CC statement shows a "PAYMENT RECEIVED $X"
+    credit for the same money movement.  The CC credit is redundant — the individual
+    CC debit transactions already capture the spending — so mark it as is_ignored.
+
+    Returns the count of transactions newly marked ignored.
+    """
+    payment_patterns = ["%payment%", "%pymt%", "%autopay%", "%auto pay%", "%thank you%"]
+
+    cc_credits = db.scalars(
+        select(Transaction).where(
+            Transaction.entity_id == entity_id,
+            Transaction.source == TransactionSource.card,
+            Transaction.direction == TransactionDirection.credit,
+            Transaction.is_ignored.is_(False),
+            or_(*(Transaction.description.ilike(p) for p in payment_patterns)),
+        )
+    ).all()
+
+    marked = 0
+    for cc_tx in cc_credits:
+        candidate_dates = [
+            cc_tx.transaction_date - timedelta(days=1),
+            cc_tx.transaction_date,
+            cc_tx.transaction_date + timedelta(days=1),
+        ]
+        bank_match = db.scalar(
+            select(Transaction).where(
+                Transaction.entity_id == entity_id,
+                Transaction.source == TransactionSource.bank,
+                Transaction.direction == TransactionDirection.debit,
+                Transaction.transaction_date.in_(candidate_dates),
+                func.abs(Transaction.amount) == func.abs(cc_tx.amount),
+                Transaction.is_ignored.is_(False),
+            )
+        )
+        if bank_match:
+            cc_tx.is_ignored = True
+            marked += 1
+
+    if marked:
+        db.commit()
+    return marked

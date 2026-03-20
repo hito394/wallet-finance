@@ -31,6 +31,7 @@ export default function TransactionsTable({ rows, categories, entityId }: Props)
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [dedupRunning, setDedupRunning] = useState(false);
 
   useEffect(() => {
     setLocalRows(rows);
@@ -65,6 +66,43 @@ export default function TransactionsTable({ rows, categories, entityId }: Props)
     setEditingId(null);
     setDraft(null);
     setPendingId(null);
+  };
+
+  const runDedup = async () => {
+    if (!entityId) return;
+    setDedupRunning(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch("/api/v1/transactions/dedup", {
+        method: "POST",
+        headers: { "x-entity-id": entityId },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.detail || "Dedup failed.");
+      } else {
+        const marked = data?.newly_ignored_rows ?? 0;
+        setSuccess(
+          marked > 0
+            ? `Dedup complete — ${marked} duplicate payment(s) hidden.`
+            : "No duplicate payments found."
+        );
+        // Refresh rows to reflect newly ignored transactions
+        if (marked > 0) {
+          const params = new URLSearchParams();
+          const refreshRes = await fetch(`/api/v1/transactions?${params}`, {
+            headers: { "x-entity-id": entityId },
+          });
+          const refreshData = await refreshRes.json();
+          if (Array.isArray(refreshData)) setLocalRows(refreshData);
+        }
+      }
+    } catch {
+      setError("Network error during dedup.");
+    } finally {
+      setDedupRunning(false);
+    }
   };
 
   const saveEdit = async () => {
@@ -123,6 +161,17 @@ export default function TransactionsTable({ rows, categories, entityId }: Props)
           <option value="credit">Credit</option>
           <option value="transfer">Transfer</option>
         </select>
+        {entityId && (
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={runDedup}
+            disabled={dedupRunning}
+            title="Find and hide duplicate credit card payment credits that also appear as bank debits"
+          >
+            {dedupRunning ? "Running..." : "Dedup Payments"}
+          </button>
+        )}
       </div>
 
       {filteredRows.length === 0 ? (

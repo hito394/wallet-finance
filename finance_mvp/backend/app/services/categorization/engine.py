@@ -16,7 +16,16 @@ CATEGORY_RULES = {
     "Education": ["university", "college", "tuition", "student", "school", "tamu", "tamu applications", "parchment", "bookstore", "tech bookstore", "tech campus"],
     "Subscriptions": ["netflix", "spotify", "subscription", "apple services", "icloud", "google one", "adobe", "chatgpt", "openai", "peacock"],
     "Income": ["salary", "payroll", "direct deposit", "bonus", "interest", "dividend", "refund", "reimbursement", "給与", "給料", "入金", "配当", "還付"],
-    "Transfers": ["transfer", "zelle", "venmo", "cash app", "wire", "wise", "振込", "振替", "送金", "立替", "payment thank you", "payment thank", "autopay", "onlinepayment", "online payment"],
+    "Transfers": [
+        "transfer", "zelle", "venmo", "cash app", "wire", "wise",
+        "振込", "振替", "送金", "立替",
+        "payment thank you", "payment thank", "payment received",
+        "autopay", "auto pay", "onlinepayment", "online payment",
+        "credit card payment", "credit card pmt", "card payment", "cc payment", "cc pmt",
+        "visa payment", "visa pmt", "mastercard payment", "mastercard pmt",
+        "amex payment", "amex pmt", "discover payment", "discover pmt",
+        "statement payment", "minimum payment due",
+    ],
 }
 
 

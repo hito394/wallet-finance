@@ -2,10 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import EntitySwitcher from "@/components/entity-switcher";
 import MonthSelector from "@/components/MonthSelector";
-import SummaryCards from "@/components/dashboard/SummaryCards";
-import SpendingPieChart from "@/components/charts/SpendingPieChart";
-import MonthlyTrendChart from "@/components/charts/MonthlyTrendChart";
-import RecentTransactionsList from "@/components/dashboard/RecentTransactionsList";
+import HomeWidgets from "@/components/HomeWidgets";
 import StatusMessage from "@/components/status-message";
 import {
   fetchDocuments,
@@ -142,35 +139,17 @@ export default async function HomePage({ searchParams }: Props) {
         </Suspense>
       </div>
 
-      {/* KPI cards */}
-      <SummaryCards
+      {/* Customizable widgets */}
+      <HomeWidgets
         overview={overview}
+        transactions={transactions}
+        history={history}
+        selectedMonth={selectedMonthStr}
+        entityId={selectedEntityId}
         docsRequiringReview={docsRequiringReview}
         openReviewQueue={reviewQueue.filter((item) => item.status === "pending").length}
+        alerts={overview?.alerts ?? []}
       />
-
-      {/* Trend chart — full width */}
-      <MonthlyTrendChart data={history} selectedMonth={selectedMonthStr} />
-
-      {/* Category breakdown — full width */}
-      <SpendingPieChart data={overview?.category_breakdown ?? []} />
-
-      {/* Alerts */}
-      {(overview?.alerts.length ?? 0) > 0 && (
-        <div className="panel" style={{ padding: "14px 20px" }}>
-          <h3 style={{ margin: "0 0 10px", fontSize: 15 }}>⚠️ Alerts</h3>
-          <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
-            {(overview?.alerts ?? []).map((alert) => (
-              <li key={alert} style={{ color: "#92400e", fontSize: 14 }}>
-                {alert}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Recent transactions for selected month */}
-      <RecentTransactionsList rows={transactions} entityId={selectedEntityId} />
 
       {overviewResult.error && (
         <StatusMessage tone="error" title="Overview unavailable" detail={overviewResult.error} />

@@ -181,3 +181,28 @@ def reclassify_transactions(
         newly_ignored_rows=newly_ignored_rows,
         scanned_rows=len(rows),
     )
+
+
+@router.post("/dedup", response_model=ReclassifyTransactionsResponse)
+def dedup_cross_source_payments(
+    x_user_id: str | None = Header(default=None),
+    x_entity_id: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> ReclassifyTransactionsResponse:
+    """
+    Find and ignore redundant cross-source payment credits.
+
+    When a bank statement and credit card statement are both uploaded, the bank
+    records a single "CREDIT CARD PAYMENT $X" debit and the CC statement records
+    a matching "PAYMENT RECEIVED $X" credit.  Both represent the same money movement,
+    so the CC credit is marked ignored to prevent double-counting.
+    """
+    from app.services.dedupe.duplicate_detector import scan_cross_source_payments
+
+    _, entity = resolve_actor_context(db, x_user_id, x_entity_id)
+    marked = scan_cross_source_payments(db, entity.id)
+    return ReclassifyTransactionsResponse(
+        updated_categories=0,
+        newly_ignored_rows=marked,
+        scanned_rows=marked,
+    )
