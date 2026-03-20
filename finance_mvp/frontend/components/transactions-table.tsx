@@ -26,6 +26,7 @@ export default function TransactionsTable({ rows, categories, entityId }: Props)
   const [localRows, setLocalRows] = useState(rows);
   const [query, setQuery] = useState("");
   const [direction, setDirection] = useState<"all" | "debit" | "credit" | "transfer">("all");
+  const [showIgnored, setShowIgnored] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -43,13 +44,16 @@ export default function TransactionsTable({ rows, categories, entityId }: Props)
 
   const filteredRows = useMemo(() => {
     return localRows.filter((row) => {
+      if (!showIgnored && row.is_ignored) return false;
       if (direction !== "all" && row.direction !== direction) return false;
       if (!query.trim()) return true;
       const categoryName = row.category_id ? categoriesById.get(row.category_id) || "" : "";
       const text = `${row.merchant_normalized} ${row.description} ${row.currency} ${categoryName}`.toLowerCase();
       return text.includes(query.toLowerCase());
     });
-  }, [localRows, direction, query, categoriesById]);
+  }, [localRows, direction, query, showIgnored, categoriesById]);
+
+  const ignoredCount = localRows.filter((r) => r.is_ignored).length;
 
   const startEdit = (row: TransactionItem) => {
     setEditingId(row.id);
@@ -170,6 +174,16 @@ export default function TransactionsTable({ rows, categories, entityId }: Props)
             title="Find and hide duplicate credit card payment credits that also appear as bank debits"
           >
             {dedupRunning ? "Running..." : "Dedup Payments"}
+          </button>
+        )}
+        {ignoredCount > 0 && (
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={() => setShowIgnored((v) => !v)}
+            style={{ opacity: 0.8 }}
+          >
+            {showIgnored ? `Hide ignored (${ignoredCount})` : `Show ignored (${ignoredCount})`}
           </button>
         )}
       </div>
