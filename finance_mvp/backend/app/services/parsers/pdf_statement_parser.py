@@ -465,6 +465,12 @@ def parse_pdf_statement_with_diagnostics(
                         continue
                     if _has_section_title(raw_line, SUMMARY_SECTION_TITLES):
                         diagnostics.summary_section_hits += 1
+                        # Detail tables often include balance marker lines
+                        # (e.g. "Beginning Balance") inside transaction detail.
+                        # Keep detail context so subsequent dated rows are not
+                        # downgraded as summary-only rows.
+                        if in_detail_section:
+                            continue
                         in_summary_section = True
                         in_detail_section = False
                         section_direction = None
@@ -540,6 +546,10 @@ def parse_statement_text_with_diagnostics(
 
         if _has_section_title(normalized_line, SUMMARY_SECTION_TITLES):
             diagnostics.summary_section_hits += 1
+            # Do not break out of detail mode for balance marker lines that
+            # appear inside the transaction detail block.
+            if in_detail_section:
+                continue
             in_summary_section = True
             in_detail_section = False
             section_direction = None

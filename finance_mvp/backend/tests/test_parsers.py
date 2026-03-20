@@ -152,6 +152,24 @@ class TestStatementTextFallbackParser:
         assert rows[1].running_balance == Decimal("1679.28")
         assert diagnostics.matched_rows >= 2
 
+    def test_keeps_detail_context_after_beginning_balance_marker(self):
+        text = textwrap.dedent(
+            """\
+            TRANSACTION DETAIL
+            DATE DESCRIPTION AMOUNT BALANCE
+            Beginning Balance $305.21
+            12/03 ATM Cash Deposit 12/03 Branch 3,000.00 3,305.21
+            12/04 Watterscape Urba Web Pmts -1,625.93 1,679.28
+            """
+        )
+
+        rows, diagnostics = parse_statement_text_with_diagnostics(text, source="bank")
+
+        assert len(rows) == 2
+        assert rows[0].amount == Decimal("3000.00")
+        assert rows[1].amount == Decimal("1625.93")
+        assert diagnostics.matched_rows >= 2
+
     def test_does_not_split_on_embedded_date_before_amount(self):
         text = textwrap.dedent(
             """\
