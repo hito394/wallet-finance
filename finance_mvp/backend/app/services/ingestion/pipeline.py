@@ -394,7 +394,7 @@ def process_import(
                 else:
                     document.parsing_status = "parsed"
                     document.parsing_failure_reason = None
-            elif parsed_row_count > 0 and created_count == 0 and same_import_existing_count > 0:
+            elif parsed_row_count > 0 and created_count == 0 and (same_import_existing_count > 0 or duplicate_count > 0):
                 document.parsing_status = "parsed"
                 document.parsing_failure_reason = None
             elif parsed_row_count > 0 and created_count == 0:
