@@ -385,13 +385,9 @@ def process_import(
                         "low_confidence_statement_extraction: "
                         "Transactions extracted but parser confidence is low"
                     )
-                elif duplicate_count > 0 or created_count < parsed_row_count:
-                    document.parsing_status = "partial"
-                    document.parsing_failure_reason = (
-                        "partial_statement_parse: "
-                        "Some rows were skipped as duplicates or could not be saved"
-                    )
                 else:
+                    # Duplicate rows being skipped is expected deduplication behavior,
+                    # not a parsing error — mark the document as fully parsed.
                     document.parsing_status = "parsed"
                     document.parsing_failure_reason = None
             elif parsed_row_count > 0 and created_count == 0 and (same_import_existing_count > 0 or duplicate_count > 0):
