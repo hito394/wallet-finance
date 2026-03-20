@@ -54,7 +54,7 @@ export default function SpendingCalendar({
     return map;
   }, [categories]);
 
-  // Fetch transactions when month changes
+  // Fetch transactions when month/entity changes
   useEffect(() => {
     const isInitial = year === initialYear && month === initialMonth;
     if (isInitial) {
@@ -83,6 +83,18 @@ export default function SpendingCalendar({
     return map;
   }, [transactions]);
 
+  // Max daily spend for heat map
+  const maxDailySpend = useMemo(() => {
+    let max = 0;
+    for (const txs of Object.values(dayMap)) {
+      const total = txs
+        .filter((t) => t.direction === "debit")
+        .reduce((s, t) => s + parseFloat(t.amount), 0);
+      if (total > max) max = total;
+    }
+    return max || 1;
+  }, [dayMap]);
+
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDow = new Date(year, month - 1, 1).getDay();
 
@@ -91,6 +103,9 @@ export default function SpendingCalendar({
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
   while (cells.length % 7 !== 0) cells.push(null);
+
+  const weeks: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
 
   const prevMonth = () => {
     setSelectedDay(null);
@@ -111,6 +126,9 @@ export default function SpendingCalendar({
   const monthTotal = transactions
     .filter((t) => !t.is_ignored && t.direction === "debit")
     .reduce((s, t) => s + parseFloat(t.amount), 0);
+  const monthIncome = transactions
+    .filter((t) => !t.is_ignored && t.direction === "credit")
+    .reduce((s, t) => s + parseFloat(t.amount), 0);
 
   const today = new Date();
   const selectedTxs = selectedDay != null ? (dayMap[selectedDay] ?? []) : [];
@@ -121,7 +139,7 @@ export default function SpendingCalendar({
       <div
         className="panel"
         style={{
-          padding: "14px 20px",
+          padding: "16px 20px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -131,11 +149,11 @@ export default function SpendingCalendar({
         <button
           onClick={prevMonth}
           style={{
-            padding: "6px 14px",
-            fontSize: 13,
+            padding: "8px 18px",
+            fontSize: 14,
             fontWeight: 600,
             border: "1px solid var(--line)",
-            borderRadius: 8,
+            borderRadius: 10,
             background: "none",
             cursor: "pointer",
             color: "var(--ink)",
@@ -146,20 +164,32 @@ export default function SpendingCalendar({
         </button>
 
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontWeight: 800, fontSize: 17, color: "var(--ink)" }}>{monthName}</div>
-          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
-            {monthTotal > 0 ? `Total spend: ${fmtFull(monthTotal)}` : "No spending data"}
+          <div style={{ fontWeight: 800, fontSize: 20, color: "var(--ink)" }}>{monthName}</div>
+          <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 4 }}>
+            {monthTotal > 0 && (
+              <span style={{ fontSize: 13, color: "#dc2626", fontWeight: 600 }}>
+                ↓ {fmtFull(monthTotal)}
+              </span>
+            )}
+            {monthIncome > 0 && (
+              <span style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>
+                ↑ {fmtFull(monthIncome)}
+              </span>
+            )}
+            {monthTotal === 0 && monthIncome === 0 && (
+              <span style={{ fontSize: 13, color: "var(--muted)" }}>No data</span>
+            )}
           </div>
         </div>
 
         <button
           onClick={nextMonth}
           style={{
-            padding: "6px 14px",
-            fontSize: 13,
+            padding: "8px 18px",
+            fontSize: 14,
             fontWeight: 600,
             border: "1px solid var(--line)",
-            borderRadius: 8,
+            borderRadius: 10,
             background: "none",
             cursor: "pointer",
             color: "var(--ink)",
@@ -171,14 +201,14 @@ export default function SpendingCalendar({
       </div>
 
       {/* Calendar grid */}
-      <div className="panel" style={{ padding: 16 }}>
+      <div className="panel" style={{ padding: "16px 16px 20px" }}>
         {/* Day-of-week headers */}
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(7, 1fr)",
             gap: 4,
-            marginBottom: 6,
+            marginBottom: 8,
           }}
         >
           {DOW_LABELS.map((d) => (
@@ -186,7 +216,7 @@ export default function SpendingCalendar({
               key={d}
               style={{
                 textAlign: "center",
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 700,
                 color: "var(--muted)",
                 textTransform: "uppercase",
@@ -199,106 +229,158 @@ export default function SpendingCalendar({
           ))}
         </div>
 
-        {/* Day cells */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
-          {cells.map((day, i) => {
-            if (!day) return <div key={i} style={{ aspectRatio: "1" }} />;
+        {/* Day cells — row by row */}
+        <div style={{ display: "grid", gap: 4 }}>
+          {weeks.map((week, wi) => (
+            <div
+              key={wi}
+              style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}
+            >
+              {week.map((day, di) => {
+                if (!day) return <div key={di} style={{ minHeight: 88 }} />;
 
-            const txs = dayMap[day] ?? [];
-            const debits = txs.filter((t) => t.direction === "debit");
-            const total = debits.reduce((s, t) => s + parseFloat(t.amount), 0);
+                const txs = dayMap[day] ?? [];
+                const debits = txs.filter((t) => t.direction === "debit");
+                const credits = txs.filter((t) => t.direction === "credit");
+                const total = debits.reduce((s, t) => s + parseFloat(t.amount), 0);
+                const income = credits.reduce((s, t) => s + parseFloat(t.amount), 0);
 
-            // Top 3 categories by spending amount
-            const catTotals: Record<string, number> = {};
-            for (const t of debits) {
-              if (t.category_id)
-                catTotals[t.category_id] = (catTotals[t.category_id] ?? 0) + parseFloat(t.amount);
-            }
-            const topCats = Object.entries(catTotals)
-              .sort(([, a], [, b]) => b - a)
-              .slice(0, 3)
-              .map(([id]) => id);
+                // Top categories by spending
+                const catTotals: Record<string, number> = {};
+                for (const t of debits) {
+                  if (t.category_id)
+                    catTotals[t.category_id] = (catTotals[t.category_id] ?? 0) + parseFloat(t.amount);
+                }
+                const topCats = Object.entries(catTotals)
+                  .sort(([, a], [, b]) => b - a)
+                  .slice(0, 3)
+                  .map(([id]) => id);
 
-            const isSelected = day === selectedDay;
-            const isToday =
-              today.getFullYear() === year &&
-              today.getMonth() + 1 === month &&
-              today.getDate() === day;
-            const hasData = txs.length > 0;
+                const isSelected = day === selectedDay;
+                const isToday =
+                  today.getFullYear() === year &&
+                  today.getMonth() + 1 === month &&
+                  today.getDate() === day;
+                const hasData = txs.length > 0;
 
-            return (
-              <button
-                key={i}
-                onClick={() => hasData && setSelectedDay(isSelected ? null : day)}
-                style={{
-                  aspectRatio: "1",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-start",
-                  padding: "6px 5px",
-                  borderRadius: 8,
-                  border: isSelected
-                    ? "2px solid var(--accent)"
-                    : isToday
-                    ? "2px solid var(--accent-2)"
-                    : "1px solid var(--line)",
-                  backgroundColor: isSelected ? "#f0fdf4" : hasData ? "var(--soft)" : "transparent",
-                  cursor: hasData ? "pointer" : "default",
-                  overflow: "hidden",
-                  background: isSelected ? "#f0fdf4" : hasData ? "var(--soft)" : "transparent",
-                  font: "inherit",
-                  textAlign: "left",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: isToday ? 800 : 500,
-                    color: isToday ? "var(--accent)" : "var(--ink)",
-                    lineHeight: 1,
-                  }}
-                >
-                  {day}
-                </span>
-                {total > 0 && (
-                  <span
+                // Heat map intensity (0–1)
+                const heat = total > 0 ? total / maxDailySpend : 0;
+                const heatBg = heat > 0
+                  ? `rgba(220,38,38,${(heat * 0.22).toFixed(3)})`
+                  : undefined;
+
+                return (
+                  <button
+                    key={di}
+                    onClick={() => hasData && setSelectedDay(isSelected ? null : day)}
                     style={{
-                      fontSize: 9,
-                      color: "#dc2626",
-                      fontWeight: 700,
-                      marginTop: 2,
-                      lineHeight: 1,
+                      minHeight: 88,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "stretch",
+                      padding: "8px 9px 7px",
+                      borderRadius: 10,
+                      border: isSelected
+                        ? "2px solid #0f766e"
+                        : isToday
+                        ? "2px solid #0ea5e9"
+                        : "1px solid var(--line)",
+                      backgroundColor: isSelected
+                        ? "#f0fdf4"
+                        : heatBg ?? "transparent",
+                      cursor: hasData ? "pointer" : "default",
                       overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      width: "100%",
+                      font: "inherit",
+                      textAlign: "left",
+                      transition: "border-color 0.1s, background-color 0.1s",
                     }}
                   >
-                    {fmt(total)}
-                  </span>
-                )}
-                {topCats.length > 0 && (
-                  <div style={{ display: "flex", gap: 2, marginTop: "auto" }}>
-                    {topCats.map((id) => (
-                      <div
-                        key={id}
+                    {/* Date number */}
+                    <span
+                      style={{
+                        fontSize: 14,
+                        fontWeight: isToday ? 800 : 600,
+                        color: isToday ? "#0ea5e9" : isSelected ? "#0f766e" : "var(--ink)",
+                        lineHeight: 1,
+                      }}
+                    >
+                      {day}
+                    </span>
+
+                    {/* Spending amount */}
+                    {total > 0 && (
+                      <span
                         style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: "50%",
-                          backgroundColor: catMap[id]?.color ?? "#5f7284",
+                          fontSize: 12,
+                          color: "#dc2626",
+                          fontWeight: 700,
+                          marginTop: 4,
+                          lineHeight: 1,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
                         }}
-                      />
-                    ))}
-                  </div>
-                )}
-              </button>
-            );
-          })}
+                      >
+                        {fmt(total)}
+                      </span>
+                    )}
+
+                    {/* Income amount */}
+                    {income > 0 && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: "#16a34a",
+                          fontWeight: 600,
+                          marginTop: 2,
+                          lineHeight: 1,
+                        }}
+                      >
+                        +{fmt(income)}
+                      </span>
+                    )}
+
+                    {/* Transaction count */}
+                    {txs.length > 0 && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: "var(--muted)",
+                          marginTop: 3,
+                          lineHeight: 1,
+                        }}
+                      >
+                        {txs.length} txn{txs.length !== 1 ? "s" : ""}
+                      </span>
+                    )}
+
+                    {/* Category dots */}
+                    {topCats.length > 0 && (
+                      <div style={{ display: "flex", gap: 3, marginTop: "auto", paddingTop: 6 }}>
+                        {topCats.map((id) => (
+                          <div
+                            key={id}
+                            title={catMap[id]?.name}
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              backgroundColor: catMap[id]?.color ?? "#94a3b8",
+                              flexShrink: 0,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </div>
 
         {loading && (
-          <p style={{ textAlign: "center", color: "var(--muted)", fontSize: 13, paddingTop: 12 }}>
+          <p style={{ textAlign: "center", color: "var(--muted)", fontSize: 13, paddingTop: 16 }}>
             Loading…
           </p>
         )}
@@ -312,18 +394,20 @@ export default function SpendingCalendar({
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              marginBottom: 14,
+              marginBottom: 16,
             }}
           >
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>
-              {new Date(year, month - 1).toLocaleString("en", { month: "long" })} {selectedDay} —{" "}
-              {selectedTxs.length} transaction{selectedTxs.length !== 1 ? "s" : ""}
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", margin: 0 }}>
+              {new Date(year, month - 1).toLocaleString("en", { month: "long" })} {selectedDay}
+              <span style={{ fontWeight: 400, color: "var(--muted)", fontSize: 14, marginLeft: 8 }}>
+                — {selectedTxs.length} transaction{selectedTxs.length !== 1 ? "s" : ""}
+              </span>
             </h3>
             <button
               onClick={() => setSelectedDay(null)}
               style={{
-                padding: "4px 10px",
-                fontSize: 12,
+                padding: "5px 12px",
+                fontSize: 13,
                 border: "1px solid var(--line)",
                 borderRadius: 8,
                 background: "none",
@@ -332,7 +416,7 @@ export default function SpendingCalendar({
                 font: "inherit",
               }}
             >
-              ✕
+              ✕ Close
             </button>
           </div>
 
@@ -347,8 +431,8 @@ export default function SpendingCalendar({
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 10,
-                      padding: "10px 12px",
+                      gap: 12,
+                      padding: "11px 14px",
                       borderRadius: 10,
                       backgroundColor: "var(--soft)",
                       border: "1px solid var(--line)",
@@ -356,17 +440,17 @@ export default function SpendingCalendar({
                   >
                     <div
                       style={{
-                        width: 8,
-                        height: 8,
+                        width: 10,
+                        height: 10,
                         borderRadius: "50%",
-                        backgroundColor: catMap[tx.category_id ?? ""]?.color ?? "#5f7284",
+                        backgroundColor: catMap[tx.category_id ?? ""]?.color ?? "#94a3b8",
                         flexShrink: 0,
                       }}
                     />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div
                         style={{
-                          fontSize: 13,
+                          fontSize: 14,
                           fontWeight: 600,
                           color: "var(--ink)",
                           overflow: "hidden",
@@ -377,20 +461,20 @@ export default function SpendingCalendar({
                         {tx.merchant_normalized || tx.merchant_raw}
                       </div>
                       {tx.category_id && catMap[tx.category_id] && (
-                        <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>
+                        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
                           {catMap[tx.category_id].name}
                         </div>
                       )}
                     </div>
                     <div
                       style={{
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: 700,
                         color: tx.direction === "credit" ? "#16a34a" : "#dc2626",
                         flexShrink: 0,
                       }}
                     >
-                      {tx.direction === "credit" ? "+" : ""}
+                      {tx.direction === "credit" ? "+" : "−"}
                       {fmtFull(parseFloat(tx.amount), tx.currency)}
                     </div>
                   </div>
@@ -402,19 +486,37 @@ export default function SpendingCalendar({
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  paddingTop: 12,
-                  marginTop: 12,
+                  paddingTop: 14,
+                  marginTop: 14,
                   borderTop: "1px solid var(--line)",
+                  gap: 12,
+                  flexWrap: "wrap",
                 }}
               >
-                <span style={{ fontSize: 13, color: "var(--muted)" }}>Day total spend</span>
-                <span style={{ fontSize: 15, fontWeight: 800, color: "#dc2626" }}>
-                  {fmtFull(
-                    selectedTxs
-                      .filter((t) => t.direction === "debit")
-                      .reduce((s, t) => s + parseFloat(t.amount), 0)
-                  )}
-                </span>
+                {selectedTxs.filter((t) => t.direction === "debit").length > 0 && (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={{ fontSize: 13, color: "var(--muted)" }}>Spent</span>
+                    <span style={{ fontSize: 16, fontWeight: 800, color: "#dc2626" }}>
+                      {fmtFull(
+                        selectedTxs
+                          .filter((t) => t.direction === "debit")
+                          .reduce((s, t) => s + parseFloat(t.amount), 0)
+                      )}
+                    </span>
+                  </div>
+                )}
+                {selectedTxs.filter((t) => t.direction === "credit").length > 0 && (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={{ fontSize: 13, color: "var(--muted)" }}>Received</span>
+                    <span style={{ fontSize: 16, fontWeight: 800, color: "#16a34a" }}>
+                      {fmtFull(
+                        selectedTxs
+                          .filter((t) => t.direction === "credit")
+                          .reduce((s, t) => s + parseFloat(t.amount), 0)
+                      )}
+                    </span>
+                  </div>
+                )}
               </div>
             </>
           )}

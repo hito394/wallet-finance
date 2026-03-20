@@ -60,6 +60,7 @@ export default async function CalendarPage({ searchParams }: Props) {
 
       {selectedEntityId && (
         <SpendingCalendar
+          key={selectedEntityId}
           initialTransactions={transactionsResult.data || []}
           categories={categoriesResult.data || []}
           initialYear={year}
