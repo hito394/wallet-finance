@@ -16,6 +16,7 @@ class MonthlyOverview(BaseModel):
     category_breakdown: list[MonthlyCategorySpend]
     detected_subscriptions: list[str]
     alerts: list[str]
+    duplicate_transaction_count: int = 0
 
 
 class InsightItem(BaseModel):

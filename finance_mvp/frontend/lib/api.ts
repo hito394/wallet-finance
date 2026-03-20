@@ -28,6 +28,7 @@ export type MonthlyOverview = {
   category_breakdown: { category: string; total: string }[];
   detected_subscriptions: string[];
   alerts: string[];
+  duplicate_transaction_count: number;
 };
 
 export type MonthlyHistoryItem = {

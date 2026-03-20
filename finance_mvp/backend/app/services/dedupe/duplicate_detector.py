@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -129,3 +130,53 @@ def scan_cross_source_payments(db: Session, entity_id) -> int:
     if marked:
         db.commit()
     return marked
+
+
+def count_fuzzy_duplicates(db: Session, entity_id) -> int:
+    """
+    Count transaction pairs that are likely cross-source duplicates:
+    same absolute amount, same direction, transaction dates within 3 days,
+    but different source or fingerprint (not already exact-matched).
+
+    This catches cases where the same purchase appears in both a bank
+    statement and a credit card statement with slightly different dates
+    or merchant name formatting.
+    """
+    txs = db.scalars(
+        select(Transaction).where(
+            Transaction.entity_id == entity_id,
+            Transaction.is_ignored.is_(False),
+        )
+    ).all()
+
+    # Group by (amount, direction) — only groups with >1 transaction are candidates
+    groups: dict[tuple, list[Transaction]] = defaultdict(list)
+    for tx in txs:
+        key = (tx.amount, tx.direction)
+        groups[key].append(tx)
+
+    seen_pairs: set[frozenset] = set()
+    count = 0
+
+    for candidates in groups.values():
+        if len(candidates) < 2:
+            continue
+        # Sort by date for efficient scanning
+        candidates.sort(key=lambda t: t.transaction_date)
+        for i, t1 in enumerate(candidates):
+            for t2 in candidates[i + 1:]:
+                diff = (t2.transaction_date - t1.transaction_date).days
+                if diff > 3:
+                    break
+                # Skip if same fingerprint (exact dedup already handled at import)
+                if t1.fingerprint and t2.fingerprint and t1.fingerprint == t2.fingerprint:
+                    continue
+                # Skip if same import (same file → not a cross-source dupe)
+                if t1.import_id and t2.import_id and t1.import_id == t2.import_id:
+                    continue
+                pair = frozenset([t1.id, t2.id])
+                if pair not in seen_pairs:
+                    seen_pairs.add(pair)
+                    count += 1
+
+    return count
