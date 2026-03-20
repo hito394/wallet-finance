@@ -113,8 +113,8 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
 
             const jobId = uploadResult.data.id;
 
-            // Step 2: poll until job completes (up to 15 s)
-            const jobResult = await pollImportJob(jobId, entityId, 15_000);
+            // Step 2: poll until job completes (up to 30 s)
+            const jobResult = await pollImportJob(jobId, entityId, 30_000);
 
             // Step 3: regardless of job success/fail, fetch the document for this import
             const docsResult = await fetchDocumentsByImportId(jobId, entityId);
@@ -126,6 +126,12 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
 
             if (jobResult.data?.status === "failed" && !doc) {
               setError(jobResult.data.error_message || "Processing failed — no document was created.");
+            } else if (!doc && jobResult.data?.status !== "completed") {
+              setError(
+                jobResult.data?.status === "failed"
+                  ? jobResult.data.error_message || "Processing failed."
+                  : "処理に時間がかかっています。しばらくしてからページを更新してください。"
+              );
             }
 
             onUploaded?.();
