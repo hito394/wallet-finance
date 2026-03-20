@@ -153,6 +153,10 @@ export const CATEGORY_LABELS: Record<string, string> = {
   other:          'その他',
 };
 
+export async function getTransactionsForCalendar(year: number, month: number): Promise<import('@/types').Transaction[]> {
+  return request<import('@/types').Transaction[]>(`/api/transactions?year=${year}&month=${month}`);
+}
+
 // ---- Plaid 銀行連携 ----
 
 export interface BankAccount {

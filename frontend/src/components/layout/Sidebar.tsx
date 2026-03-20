@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard,
+  Home,
   ArrowLeftRight,
   Receipt,
   Upload,
@@ -13,7 +13,7 @@ import {
 import clsx from 'clsx';
 
 const NAV_ITEMS = [
-  { href: '/',             label: 'ダッシュボード', icon: LayoutDashboard },
+  { href: '/',             label: 'ホーム',   icon: Home            },
   { href: '/transactions', label: '取引',           icon: ArrowLeftRight  },
   { href: '/accounts',     label: '口座連携',        icon: Landmark        },
   { href: '/receipts',     label: 'レシート',        icon: Receipt         },
