@@ -43,7 +43,6 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [sourceType, setSourceType] = useState<UploadSourceSelection>("auto");
-  const [forceImport, setForceImport] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -91,17 +90,6 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
         </div>
       </div>
 
-      <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, marginTop: 4, color: "#475569" }}>
-        <input
-          type="checkbox"
-          checked={forceImport}
-          onChange={(e) => setForceImport(e.target.checked)}
-        />
-        <span>
-          <strong>Force import</strong>
-          <span className="muted" style={{ marginLeft: 4 }}>(skip duplicate detection — re-imports even if already uploaded)</span>
-        </span>
-      </label>
 
       <div className="toolbar">
         <button
@@ -116,21 +104,11 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
             setProcessedDoc(null);
 
             // Step 1: upload → get import job ID
-            const uploadResult = await uploadDocument(file, sourceType, entityId, forceImport);
+            const uploadResult = await uploadDocument(file, sourceType, entityId);
             if (uploadResult.error || !uploadResult.data) {
               setIsUploading(false);
               setError(uploadResult.error || "Upload failed");
               return;
-            }
-
-            const reused = uploadResult.data.metadata_json?.idempotent_reuse === true;
-            if (reused) {
-              const originalName = uploadResult.data.file_name;
-              setInfo(
-                originalName && originalName !== file.name
-                  ? `Duplicate content detected. Reused existing upload: ${originalName}.`
-                  : "Duplicate content detected. Reused existing upload result.",
-              );
             }
 
             const jobId = uploadResult.data.id;

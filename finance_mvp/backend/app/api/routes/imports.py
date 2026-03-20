@@ -2,7 +2,7 @@ import hashlib
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -174,12 +174,12 @@ def _persist_upload_and_hash(file: UploadFile, destination: Path) -> str:
     return digest.hexdigest()
 
 
-def _run_import_job(import_id: str, *, skip_dedup: bool = False) -> None:
+def _run_import_job(import_id: str) -> None:
     with SessionLocal() as db:
         job = db.scalar(select(ImportJob).where(ImportJob.id == import_id))
         if not job:
             return
-        process_import(db, job, job.storage_uri, skip_dedup=skip_dedup)
+        process_import(db, job, job.storage_uri)
 
 
 @router.post("/upload", response_model=ImportJobRead, status_code=status.HTTP_201_CREATED)
@@ -187,7 +187,6 @@ def upload_import(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     source_type: str | None = None,
-    force: bool = Query(default=False, description="Bypass idempotency guard and duplicate transaction detection"),
     x_user_id: str | None = Header(default=None),
     x_entity_id: str | None = Header(default=None),
     db: Session = Depends(get_db),
@@ -223,49 +222,6 @@ def upload_import(
     else:
         resolved_source_type = _infer_source_type_from_content(destination, safe_name) or _infer_source_type(safe_name)
 
-    # Idempotency guard: same entity + source_type + content hash reuses the
-    # existing import job to avoid duplicate document/transaction rows.
-    existing = db.scalar(
-        select(ImportJob)
-        .where(
-            ImportJob.entity_id == entity.id,
-            ImportJob.source_type == resolved_source_type,
-            ImportJob.file_hash == file_hash,
-        )
-        .order_by(ImportJob.created_at.desc())
-    )
-
-    if existing and existing.status in {ImportStatus.pending, ImportStatus.processing, ImportStatus.completed}:
-        existing_document = db.scalar(
-            select(FinancialDocument)
-            .where(
-                FinancialDocument.entity_id == entity.id,
-                FinancialDocument.import_id == existing.id,
-            )
-            .order_by(FinancialDocument.created_at.desc())
-        )
-        # Reuse should not lock users into a failed parse result.
-        if existing_document and existing_document.parsing_status == "failed":
-            existing = None
-
-    if not force and existing and existing.status in {ImportStatus.pending, ImportStatus.processing, ImportStatus.completed}:
-        # Best-effort cleanup: this request uploaded a duplicate payload, so we
-        # can discard the newly written temporary file.
-        try:
-            destination.unlink(missing_ok=True)
-        except Exception:
-            pass
-
-        existing.metadata_json = {
-            **(existing.metadata_json or {}),
-            "idempotent_reuse": True,
-            "reused_upload_file_name": safe_name,
-        }
-        db.add(existing)
-        db.commit()
-        db.refresh(existing)
-        return existing
-
     job = ImportJob(
         user_id=user.id,
         entity_id=entity.id,
@@ -274,13 +230,13 @@ def upload_import(
         file_name=safe_name,
         file_hash=file_hash,
         storage_uri=str(destination),
-        metadata_json={"force_import": True} if force else {},
+        metadata_json={},
     )
     db.add(job)
     db.commit()
     db.refresh(job)
 
-    background_tasks.add_task(_run_import_job, str(job.id), skip_dedup=force)
+    background_tasks.add_task(_run_import_job, str(job.id))
 
     return job
 

@@ -369,14 +369,13 @@ export async function uploadDocument(
   file: File,
   sourceType: UploadSourceSelection,
   entityId?: string,
-  force?: boolean,
 ): Promise<ApiResult<ImportJob>> {
   const form = new FormData();
   form.set("file", file);
-  const params = new URLSearchParams();
-  if (sourceType && sourceType !== "auto") params.set("source_type", sourceType);
-  if (force) params.set("force", "true");
-  const query = params.toString() ? `?${params.toString()}` : "";
+  const query =
+    sourceType && sourceType !== "auto"
+      ? `?source_type=${encodeURIComponent(sourceType)}`
+      : "";
   const path = `/imports/upload${query}`;
   const url = `${resolveApiBaseUrl()}${path}`;
 
