@@ -34,7 +34,7 @@ numpy==1.26.4
 rapidfuzz==3.6.1
 
 # === Plaid ===
-plaid-python==17.1.0
+plaid-python==17.0.0
 
 # === HTTP / Testing ===
 httpx==0.26.0

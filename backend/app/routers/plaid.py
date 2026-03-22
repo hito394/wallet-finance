@@ -20,7 +20,9 @@ from app.database import get_db
 from app.models.plaid_item import PlaidItem
 from app.models.transaction import Transaction, TransactionDirection
 from app.models.import_record import ImportRecord, ImportType, ImportStatus
-from app.services.categorization_service import categorize_merchant
+from app.services.categorization_service import CategorizationService
+
+_categorizer = CategorizationService()
 
 router = APIRouter(prefix="/api/plaid", tags=["plaid"])
 CURRENT_USER_ID = settings.DEFAULT_USER_ID
@@ -294,7 +296,10 @@ async def sync_plaid_item(item_id: str, db: AsyncSession = Depends(get_db)):
                 skipped += 1
                 continue
 
-            category = categorize_merchant(merchant_name)
+            category = _categorizer.classify(
+                merchant_raw=merchant_name,
+                direction=direction.value,
+            )
 
             new_tx = Transaction(
                 user_id=CURRENT_USER_ID,
@@ -318,11 +323,8 @@ async def sync_plaid_item(item_id: str, db: AsyncSession = Depends(get_db)):
         import_record.completed_at = datetime.utcnow()
 
         # 口座情報を更新
-        acct_resp = client.accounts_get(
-            __import__("plaid.model.accounts_get_request", fromlist=["AccountsGetRequest"]).AccountsGetRequest(
-                access_token=plaid_item.access_token
-            )
-        )
+        from plaid.model.accounts_get_request import AccountsGetRequest
+        acct_resp = client.accounts_get(AccountsGetRequest(access_token=plaid_item.access_token))
         plaid_item.accounts_cache = [
             {
                 "id": a["account_id"],
