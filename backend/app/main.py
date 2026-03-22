@@ -13,6 +13,7 @@ from app.routers import (
     analytics_router,
     goals_router,
     accounts_router,
+    plaid_router,
 )
 
 
@@ -81,6 +82,7 @@ app.include_router(receipts_router)
 app.include_router(analytics_router)
 app.include_router(goals_router)
 app.include_router(accounts_router)
+app.include_router(plaid_router)
 
 
 @app.get("/api/health")
