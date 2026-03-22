@@ -54,32 +54,40 @@ export default function SpendingPieChart({ data }: Props) {
     <div className="panel chart-panel" style={{ padding: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
         <h3>Spending Breakdown</h3>
-        <span style={{ color: "#5f7284", fontSize: 13 }}>Total: {fmt(total)}</span>
+        <span style={{ color: "#5f7284", fontSize: 13 }}>{fmt(total)}</span>
       </div>
 
-      <ResponsiveContainer width="100%" height={260}>
-        <PieChart>
-          <Pie
-            data={slices}
-            cx="50%"
-            cy="50%"
-            innerRadius={60}
-            outerRadius={110}
-            paddingAngle={2}
-            dataKey="value"
-            labelLine={false}
-            label={renderLabel}
-          >
-            {slices.map((_, i) => (
-              <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-            ))}
-          </Pie>
-          <Tooltip formatter={(v: number) => fmt(v)} />
-          <Legend
-            formatter={(value) => <span style={{ fontSize: 12, color: "#10212f" }}>{value}</span>}
-          />
-        </PieChart>
-      </ResponsiveContainer>
+      <div style={{ position: "relative" }}>
+        <ResponsiveContainer width="100%" height={240}>
+          <PieChart>
+            <Pie
+              data={slices}
+              cx="50%"
+              cy="50%"
+              innerRadius={68}
+              outerRadius={108}
+              paddingAngle={2}
+              dataKey="value"
+              labelLine={false}
+              label={renderLabel}
+            >
+              {slices.map((_, i) => (
+                <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
+              ))}
+            </Pie>
+            <Tooltip formatter={(v: number) => fmt(v)} />
+          </PieChart>
+        </ResponsiveContainer>
+        {/* Center label */}
+        <div style={{
+          position: "absolute", top: "50%", left: "50%",
+          transform: "translate(-50%, -50%)",
+          textAlign: "center", pointerEvents: "none",
+        }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#10212f", lineHeight: 1 }}>{fmt(total)}</div>
+          <div style={{ fontSize: 11, color: "#5f7284", marginTop: 3 }}>支出合計</div>
+        </div>
+      </div>
 
       {/* Category table */}
       <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 12, fontSize: 13 }}>

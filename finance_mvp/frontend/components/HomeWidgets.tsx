@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import MonthlyTrendChart from "@/components/charts/MonthlyTrendChart";
 import SpendingPieChart from "@/components/charts/SpendingPieChart";
+import CashFlowCard from "@/components/dashboard/CashFlowCard";
 import RecentTransactionsList from "@/components/dashboard/RecentTransactionsList";
 import { asNumber } from "@/lib/api";
 import type { MonthlyOverview, MonthlyHistoryItem, TransactionItem } from "@/lib/api";
@@ -41,11 +42,13 @@ const KPI_IDS = new Set(["card_spend", "card_income", "card_net", "card_subs", "
 const RESIZABLE_IDS = new Set(["alerts", "trend", "pie", "recent"]);
 
 const DEFAULT_ORDER = [
+  "cashflow",
   "card_spend", "card_income", "card_net", "card_subs", "card_docs", "card_queue",
   "alerts", "trend", "pie", "recent",
 ];
 
 const WIDGET_LABELS: Record<string, string> = {
+  cashflow:    "Cash Flow",
   card_spend:  "Monthly Spend",
   card_income: "Monthly Income",
   card_net:    "Net Cashflow",
@@ -219,6 +222,8 @@ export default function HomeWidgets({ overview, transactions, history, selectedM
           </div>
         );
       }
+      case "cashflow":
+        return <CashFlowCard overview={overview} />;
       case "trend":
         return <MonthlyTrendChart data={history} selectedMonth={selectedMonth} />;
       case "pie":
@@ -286,6 +291,7 @@ export default function HomeWidgets({ overview, transactions, history, selectedM
   if (!mounted) {
     return (
       <div style={{ display: "grid", gap: 20 }}>
+        {renderWidget("cashflow")}
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
           {["card_spend", "card_income", "card_net", "card_subs", "card_docs", "card_queue"].map(id => (
             <div key={id}>{renderKpiCard(id)}</div>
