@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import useSWR from 'swr';
 import { usePlaidLink } from 'react-plaid-link';
 import {
@@ -550,7 +550,7 @@ function PlaidConnectButton({ onSuccess }: { onSuccess: () => void }) {
   const [error, setError] = useState<string | null>(null);
 
   const { open, ready } = usePlaidLink({
-    token: token ?? '',
+    token: token ?? null,
     onSuccess: async (publicToken) => {
       try {
         await exchangePlaidToken(publicToken);
@@ -563,10 +563,12 @@ function PlaidConnectButton({ onSuccess }: { onSuccess: () => void }) {
     },
   });
 
-  // トークン取得後に自動でLinkを開く
-  if (token && ready) {
-    open();
-  }
+  // トークン取得後に自動でLinkを開く（useEffectで副作用として実行）
+  useEffect(() => {
+    if (token && ready) {
+      open();
+    }
+  }, [token, ready, open]);
 
   async function handleClick() {
     setLoading(true);
