@@ -11,6 +11,7 @@ from app.routers import (
     transactions_router,
     receipts_router,
     analytics_router,
+    goals_router,
 )
 
 
@@ -77,6 +78,7 @@ app.include_router(imports_router)
 app.include_router(transactions_router)
 app.include_router(receipts_router)
 app.include_router(analytics_router)
+app.include_router(goals_router)
 
 
 @app.get("/api/health")

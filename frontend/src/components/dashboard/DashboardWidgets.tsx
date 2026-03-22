@@ -6,6 +6,8 @@ import { SummaryCard } from './SummaryCard';
 import { SpendingChart } from './SpendingChart';
 import { CategoryPieChart } from './CategoryPieChart';
 import { RecentTransactions } from './RecentTransactions';
+import { SubscriptionWidget } from './SubscriptionWidget';
+import { SpendingGoalChart } from './SpendingGoalChart';
 import { AlertTriangle, FileSearch, Copy } from 'lucide-react';
 import type { DashboardSummary, Transaction } from '@/types';
 
@@ -17,7 +19,9 @@ type WidgetId =
   | 'alerts'
   | 'trend'
   | 'category'
-  | 'transactions';
+  | 'transactions'
+  | 'subscriptions'
+  | 'goals';
 
 type WidgetConfig = {
   id: WidgetId;
@@ -28,14 +32,16 @@ type WidgetConfig = {
 const KPI_IDS = new Set<WidgetId>(['kpi_expense', 'kpi_income', 'kpi_net', 'kpi_imports']);
 
 const DEFAULT_CONFIG: WidgetConfig[] = [
-  { id: 'kpi_expense',  label: '今月の支出',     visible: true },
-  { id: 'kpi_income',   label: '今月の収入',     visible: true },
-  { id: 'kpi_net',      label: '収支',           visible: true },
-  { id: 'kpi_imports',  label: 'インポート回数', visible: true },
-  { id: 'alerts',       label: 'アラート',       visible: true },
-  { id: 'trend',        label: '月次トレンド',   visible: true },
-  { id: 'category',     label: 'カテゴリ別支出', visible: true },
-  { id: 'transactions', label: '直近の取引',     visible: true },
+  { id: 'kpi_expense',    label: '今月の支出',       visible: true },
+  { id: 'kpi_income',     label: '今月の収入',       visible: true },
+  { id: 'kpi_net',        label: '収支',             visible: true },
+  { id: 'kpi_imports',    label: 'インポート回数',   visible: true },
+  { id: 'alerts',         label: 'アラート',         visible: true },
+  { id: 'goals',          label: '目標 vs 実績',     visible: true },
+  { id: 'trend',          label: '月次トレンド',     visible: true },
+  { id: 'category',       label: 'カテゴリ別支出',   visible: true },
+  { id: 'subscriptions',  label: 'サブスクリプション', visible: true },
+  { id: 'transactions',   label: '直近の取引',       visible: true },
 ];
 
 const STORAGE_KEY = 'dashboard_widget_config_v2';
@@ -321,6 +327,12 @@ export function DashboardWidgets({ dashboard, transactions }: Props) {
           </div>
         );
 
+      case 'subscriptions':
+        return <SubscriptionWidget key={key} />;
+
+      case 'goals':
+        return <SpendingGoalChart key={key} />;
+
       case 'transactions':
         return (
           <div key={key} className="rounded-2xl p-5" style={{ backgroundColor: '#13151F', border: '1px solid #1E2030' }}>
@@ -399,7 +411,9 @@ export function DashboardWidgets({ dashboard, transactions }: Props) {
             {renderKpiCard('kpi_imports')}
           </div>
           {renderWidget('alerts', 'alerts')}
+          {renderWidget('goals', 'goals')}
           {renderWidget('trend', 'trend')}
+          {renderWidget('subscriptions', 'subscriptions')}
           {renderWidget('transactions', 'transactions')}
         </div>
       )}

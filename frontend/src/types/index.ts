@@ -113,3 +113,53 @@ export interface DashboardSummary {
 }
 
 export type TransactionDirection = 'debit' | 'credit';
+
+// ── 支出目標 ──────────────────────────────────────────────────────────────────
+
+export interface SpendingGoal {
+  id: number;
+  user_id: number;
+  category: string | null;
+  month: string | null;
+  target_amount: string;
+  is_recurring: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SpendingGoalCreate {
+  category: string | null;
+  month: string | null;
+  target_amount: number;
+  is_recurring: boolean;
+}
+
+// ── サブスクリプション ─────────────────────────────────────────────────────────
+
+export interface SubscriptionItem {
+  merchant: string;
+  merchant_domain: string | null;
+  monthly_amount: string;
+  last_charge_date: string;
+  charge_count: number;
+  category: string;
+}
+
+export interface SubscriptionsResponse {
+  subscriptions: SubscriptionItem[];
+  total_monthly: string;
+}
+
+// ── 目標 vs 実績 ──────────────────────────────────────────────────────────────
+
+export interface GoalVsActualPoint {
+  month: string;
+  actual: string;
+  goal: string | null;
+}
+
+export interface GoalVsActualResponse {
+  points: GoalVsActualPoint[];
+  category: string | null;
+  target_amount: string | null;
+}
