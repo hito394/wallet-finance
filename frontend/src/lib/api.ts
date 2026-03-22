@@ -204,6 +204,47 @@ export async function disconnectPlaidItem(item_id: string): Promise<void> {
   await request(`/api/plaid/items/${item_id}`, { method: 'DELETE' });
 }
 
+// ---- 口座・カード ----
+
+export async function getLinkedAccounts() {
+  return request<import('@/types').LinkedAccount[]>('/api/accounts');
+}
+
+export async function createLinkedAccount(data: import('@/types').LinkedAccountCreate) {
+  return request<import('@/types').LinkedAccount>('/api/accounts', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateLinkedAccount(id: number, data: Partial<import('@/types').LinkedAccountCreate & { is_active: boolean }>) {
+  return request<import('@/types').LinkedAccount>(`/api/accounts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteLinkedAccount(id: number) {
+  return request<{ ok: boolean }>(`/api/accounts/${id}`, { method: 'DELETE' });
+}
+
+export async function getAccountSummary(id: number, month?: string) {
+  const q = month ? `?month=${month}` : '';
+  return request<import('@/types').AccountSummary>(`/api/accounts/${id}/summary${q}`);
+}
+
+export async function getAccountImports(id: number) {
+  return request<import('@/types').AccountImport[]>(`/api/accounts/${id}/imports`);
+}
+
+export async function linkImportToAccount(accountId: number, importId: number) {
+  return request<{ ok: boolean }>(`/api/accounts/${accountId}/imports/${importId}`, { method: 'POST' });
+}
+
+export async function unlinkImportFromAccount(accountId: number, importId: number) {
+  return request<{ ok: boolean }>(`/api/accounts/${accountId}/imports/${importId}`, { method: 'DELETE' });
+}
+
 // ---- 支出目標 ----
 
 export async function getGoals() {

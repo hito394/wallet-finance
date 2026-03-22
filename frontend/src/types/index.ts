@@ -114,6 +114,52 @@ export interface DashboardSummary {
 
 export type TransactionDirection = 'debit' | 'credit';
 
+// ── 口座・カード ──────────────────────────────────────────────────────────────
+
+export type AccountType = 'checking' | 'savings' | 'credit' | 'debit' | 'prepaid' | 'investment' | 'other';
+
+export interface LinkedAccount {
+  id: number;
+  user_id: number;
+  name: string;
+  institution: string;
+  account_type: AccountType;
+  last4: string | null;
+  color: string;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LinkedAccountCreate {
+  name: string;
+  institution: string;
+  account_type: AccountType;
+  last4?: string;
+  color: string;
+  notes?: string;
+}
+
+export interface AccountSummary {
+  account: LinkedAccount;
+  month_expense: string;
+  month_income: string;
+  month_net: string;
+  month_transaction_count: number;
+  total_import_count: number;
+  last_import_at: string | null;
+}
+
+export interface AccountImport {
+  id: number;
+  original_filename: string;
+  import_type: string;
+  status: string;
+  success_rows: number;
+  created_at: string;
+}
+
 // ── 支出目標 ──────────────────────────────────────────────────────────────────
 
 export interface SpendingGoal {

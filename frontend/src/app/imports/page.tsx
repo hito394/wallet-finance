@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import useSWR from 'swr';
-import { getImports, uploadStatement, uploadReceipt, formatDate } from '@/lib/api';
-import type { ImportRecord } from '@/types';
+import { getImports, uploadStatement, uploadReceipt, formatDate, getLinkedAccounts, linkImportToAccount } from '@/lib/api';
+import type { ImportRecord, LinkedAccount } from '@/types';
 import { FileUpload } from '@/components/ui/FileUpload';
-import { Loader2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, Clock, CreditCard } from 'lucide-react';
 
 const STATUS_STYLE: Record<string, { label: string; bg: string; color: string; border: string }> = {
   pending:    { label: '待機中',   bg: '#1E2030', color: '#64748B', border: '#2A2D42' },
@@ -23,16 +23,62 @@ const TYPE_LABELS: Record<string, string> = {
   receipt_pdf:    'レシート PDF',
 };
 
+// ─── 口座選択セレクト ─────────────────────────────────────────────────────────
+
+function AccountSelect({
+  accounts,
+  value,
+  onChange,
+}: {
+  accounts: LinkedAccount[];
+  value: number | null;
+  onChange: (id: number | null) => void;
+}) {
+  if (accounts.length === 0) return null;
+  return (
+    <div>
+      <label className="text-xs mb-1.5 flex items-center gap-1.5" style={{ color: '#475569' }}>
+        <CreditCard size={11} />
+        紐付ける口座（任意）
+      </label>
+      <select
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value ? Number(e.target.value) : null)}
+        className="w-full text-xs rounded-xl px-3 py-2"
+        style={{
+          backgroundColor: '#0E0F1A',
+          border: '1px solid #1E2030',
+          color: value ? '#CBD5E1' : '#475569',
+          outline: 'none',
+        }}
+      >
+        <option value="">口座を選択しない</option>
+        {accounts.map(a => (
+          <option key={a.id} value={a.id}>
+            {a.name}（{a.institution}）
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export default function ImportsPage() {
   const { data: imports, mutate, isLoading } = useSWR('imports', () => getImports());
+  const { data: accounts = [] } = useSWR('linked-accounts', getLinkedAccounts);
+  const [statementAccountId, setStatementAccountId] = useState<number | null>(null);
 
   const handleStatementUpload = useCallback(
     async (file: File) => {
       const result = await uploadStatement(file);
+      // アップロード後に口座と紐付け
+      if (statementAccountId && result.import_record?.id) {
+        await linkImportToAccount(statementAccountId, result.import_record.id);
+      }
       mutate();
       return result;
     },
-    [mutate]
+    [mutate, statementAccountId]
   );
 
   const handleReceiptUpload = useCallback(
@@ -65,6 +111,11 @@ export default function ImportsPage() {
               CSV・PDF・OFX/QFX形式に対応。日米主要銀行のフォーマット
             </p>
           </div>
+          <AccountSelect
+            accounts={accounts}
+            value={statementAccountId}
+            onChange={setStatementAccountId}
+          />
           <FileUpload
             label="銀行明細ファイル"
             hint="CSV / PDF / OFX / QFX"
