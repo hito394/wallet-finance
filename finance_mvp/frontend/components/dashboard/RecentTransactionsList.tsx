@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import type { TransactionItem } from "@/lib/api";
 
@@ -12,10 +15,113 @@ const PALETTE = [
   "#f97316","#6366f1",
 ];
 
+const MERCHANT_DOMAIN_MAP: Record<string, string> = {
+  "amazon": "amazon.com", "amazon prime": "amazon.com",
+  "netflix": "netflix.com", "spotify": "spotify.com",
+  "hulu": "hulu.com", "disney": "disneyplus.com",
+  "youtube": "youtube.com", "apple": "apple.com",
+  "google": "google.com", "microsoft": "microsoft.com",
+  "adobe": "adobe.com", "dropbox": "dropbox.com",
+  "notion": "notion.so", "slack": "slack.com",
+  "figma": "figma.com", "canva": "canva.com",
+  "zoom": "zoom.us", "github": "github.com",
+  "openai": "openai.com", "chatgpt": "openai.com",
+  "uber": "uber.com", "lyft": "lyft.com",
+  "airbnb": "airbnb.com", "booking": "booking.com",
+  "starbucks": "starbucks.com", "mcdonald": "mcdonalds.com",
+  "target": "target.com", "walmart": "walmart.com",
+  "costco": "costco.com", "whole foods": "wholefoods.com",
+  "paypal": "paypal.com", "venmo": "venmo.com",
+  "stripe": "stripe.com", "shopify": "shopify.com",
+  "rakuten": "rakuten.co.jp", "nintendo": "nintendo.com",
+  "playstation": "playstation.com", "xbox": "xbox.com",
+  "nordvpn": "nordvpn.com", "grammarly": "grammarly.com",
+  "duolingo": "duolingo.com", "docomo": "docomo.ne.jp",
+  "softbank": "softbank.jp",
+};
+
+const MERCHANT_EMOJI: Record<string, string> = {
+  "amazon": "📦", "netflix": "🎬", "spotify": "🎵",
+  "hulu": "📺", "disney": "🏰", "youtube": "▶️",
+  "apple": "🍎", "google": "🔵", "microsoft": "💼",
+  "adobe": "🅰️", "notion": "📝", "slack": "💬",
+  "figma": "🎨", "canva": "🎨", "zoom": "🎥",
+  "github": "💻", "openai": "🤖", "chatgpt": "🤖",
+  "uber": "🚗", "lyft": "🚗", "airbnb": "🏠",
+  "starbucks": "☕", "mcdonald": "🍔",
+  "target": "🎯", "walmart": "🛒", "costco": "🏬",
+  "nintendo": "🎮", "playstation": "🕹️", "xbox": "🎮",
+  "duolingo": "🦜", "paypal": "💳",
+};
+
+function guessDomain(name: string): string | null {
+  const lower = name.toLowerCase();
+  for (const [key, domain] of Object.entries(MERCHANT_DOMAIN_MAP)) {
+    if (lower.includes(key)) return domain;
+  }
+  return null;
+}
+
+function guessEmoji(name: string): string | null {
+  const lower = name.toLowerCase();
+  for (const [key, emoji] of Object.entries(MERCHANT_EMOJI)) {
+    if (lower.includes(key)) return emoji;
+  }
+  return null;
+}
+
 function merchantColor(name: string) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   return PALETTE[Math.abs(hash) % PALETTE.length];
+}
+
+function MerchantIcon({ merchant }: { merchant: string }) {
+  const [imgOk, setImgOk] = useState(false);
+  const [imgErr, setImgErr] = useState(false);
+
+  const domain = guessDomain(merchant);
+  const emoji = guessEmoji(merchant);
+  const logoUrl = domain ? `https://logo.clearbit.com/${domain}` : null;
+  const color = merchantColor(merchant);
+  const initials = merchant.slice(0, 2).toUpperCase();
+
+  if (logoUrl && imgOk) {
+    return (
+      <div style={{
+        width: 40, height: 40, borderRadius: 12,
+        background: "#fff",
+        border: "1.5px solid #e8eef3",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        flexShrink: 0, overflow: "hidden",
+      }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={logoUrl} alt={merchant} style={{ width: 26, height: 26, objectFit: "contain" }} />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      width: 40, height: 40, borderRadius: 12,
+      background: color + "20",
+      border: `1.5px solid ${color}40`,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: emoji ? 18 : 13, fontWeight: 800, color, flexShrink: 0,
+      letterSpacing: "-0.5px", position: "relative", overflow: "hidden",
+    }}>
+      {logoUrl && !imgErr && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logoUrl} alt=""
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", opacity: 0 }}
+          onLoad={() => setImgOk(true)}
+          onError={() => setImgErr(true)}
+        />
+      )}
+      <span role={emoji ? "img" : undefined}>{emoji ?? initials}</span>
+    </div>
+  );
 }
 
 function fmtDate(d: string) {
@@ -45,8 +151,6 @@ export default function RecentTransactionsList({ rows, entityId }: Props) {
           {items.map((row) => {
             const isCredit = row.direction === "credit";
             const merchant = row.merchant_normalized || row.merchant_raw;
-            const initials = merchant.slice(0, 2).toUpperCase();
-            const color = merchantColor(merchant);
             const amount = Number(row.amount);
 
             return (
@@ -63,17 +167,7 @@ export default function RecentTransactionsList({ rows, entityId }: Props) {
                 onMouseEnter={e => (e.currentTarget.style.background = "#f8fafc")}
                 onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
               >
-                {/* Avatar */}
-                <div style={{
-                  width: 40, height: 40, borderRadius: 12,
-                  background: color + "20",
-                  border: `1.5px solid ${color}40`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 13, fontWeight: 800, color, flexShrink: 0,
-                  letterSpacing: "-0.5px",
-                }}>
-                  {initials}
-                </div>
+                <MerchantIcon merchant={merchant} />
 
                 {/* Info */}
                 <div style={{ flex: 1, minWidth: 0 }}>

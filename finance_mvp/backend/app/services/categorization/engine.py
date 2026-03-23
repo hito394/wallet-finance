@@ -14,7 +14,41 @@ CATEGORY_RULES = {
     "Entertainment": ["cinema", "movie", "steam", "xbox", "playstation", "hulu", "disney+"],
     "Health": ["pharmacy", "hospital", "clinic", "dental", "drug store", "welcia", "matsumoto kiyoshi"],
     "Education": ["university", "college", "tuition", "student", "school", "tamu", "tamu applications", "parchment", "bookstore", "tech bookstore", "tech campus"],
-    "Subscriptions": ["netflix", "spotify", "subscription", "apple services", "icloud", "google one", "adobe", "chatgpt", "openai", "peacock"],
+    "Subscriptions": [
+        # General
+        "subscription", "monthly plan", "annual plan", "auto-renew", "autorenew",
+        # Video streaming
+        "netflix", "hulu", "disney+", "disneyplus", "disney plus", "amazon prime",
+        "prime video", "apple tv+", "apple tv plus", "youtube premium", "dazn",
+        "abema", "u-next", "unext", "crunchyroll", "funimation", "peacock",
+        "paramount+", "paramount plus", "hbo max", "max.com", "showtime", "starz",
+        # Music / audio
+        "spotify", "apple music", "youtube music", "amazon music", "tidal",
+        "deezer", "audible", "scribd",
+        # Cloud storage
+        "icloud", "google one", "dropbox", "onedrive", "box.com",
+        # Software / SaaS
+        "adobe", "apple services", "apple.com/bill", "apple.com/storage",
+        "microsoft 365", "office 365", "m365", "github", "gitlab",
+        "notion", "notion.so", "slack", "figma", "canva", "zoom",
+        "chatgpt", "openai", "anthropic", "claude.ai",
+        "grammarly", "1password", "lastpass", "dashlane",
+        "nordvpn", "expressvpn", "surfshark",
+        "loom", "calendly", "miro", "asana", "monday.com",
+        "evernote", "todoist", "airtable",
+        # Gaming
+        "xbox game pass", "game pass", "playstation plus", "ps plus", "ps+",
+        "nintendo switch online", "nintendo online", "ea play", "ubisoft+",
+        "steam subscription",
+        # Health / fitness
+        "headspace", "calm", "peloton", "noom", "beachbody",
+        # Education
+        "duolingo", "skillshare", "masterclass", "coursera", "udemy",
+        "linkedin learning", "linkedin premium",
+        # Japanese services
+        "ニコニコ", "nicovideo", "nico nico", "dmm", "kindle unlimited",
+        "rakuten viki", "nhk plus",
+    ],
     "Income": ["salary", "payroll", "direct deposit", "bonus", "interest", "dividend", "refund", "reimbursement", "給与", "給料", "入金", "配当", "還付"],
     "Transfers": [
         "transfer", "zelle", "venmo", "cash app", "wire", "wise",

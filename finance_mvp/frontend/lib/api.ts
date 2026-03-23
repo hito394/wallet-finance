@@ -474,6 +474,68 @@ export async function downloadAccountingCsv(entityId?: string): Promise<ApiResul
   }
 }
 
+// ── Plaid ──────────────────────────────────────────────────────────────────
+
+export type BankAccountItem = {
+  id: string;
+  plaid_account_id: string;
+  name: string;
+  official_name: string | null;
+  account_type: string | null;
+  account_subtype: string | null;
+  mask: string | null;
+  currency: string;
+  current_balance: number | null;
+  available_balance: number | null;
+  last_synced_at: string | null;
+};
+
+export type PlaidItemOut = {
+  id: string;
+  institution_name: string;
+  institution_id: string | null;
+  last_synced_at: string | null;
+  accounts: BankAccountItem[];
+};
+
+export async function fetchPlaidLinkToken(entityId?: string): Promise<ApiResult<{ link_token: string; plaid_env: string }>> {
+  return requestJson<{ link_token: string; plaid_env: string }>("/plaid/link-token", undefined, { entityId });
+}
+
+export async function exchangePlaidToken(publicToken: string, entityId?: string): Promise<ApiResult<{ item_id: string; institution_name: string; message: string }>> {
+  return requestJson<{ item_id: string; institution_name: string; message: string }>(
+    "/plaid/exchange",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ public_token: publicToken }) },
+    { entityId },
+  );
+}
+
+export async function fetchPlaidAccounts(entityId?: string): Promise<ApiResult<{ items: PlaidItemOut[] }>> {
+  return requestJson<{ items: PlaidItemOut[] }>("/plaid/accounts", undefined, { entityId });
+}
+
+export async function syncPlaidItem(itemId: string, entityId?: string): Promise<ApiResult<{ added: number; modified: number; removed: number }>> {
+  return requestJson<{ added: number; modified: number; removed: number }>(
+    `/plaid/sync/${encodeURIComponent(itemId)}`,
+    { method: "POST" },
+    { entityId },
+  );
+}
+
+export async function disconnectPlaidItem(itemId: string, entityId?: string): Promise<ApiResult<null>> {
+  const url = `${resolveApiBaseUrl()}/plaid/items/${encodeURIComponent(itemId)}`;
+  try {
+    const response = await fetch(url, { method: "DELETE", headers: entityHeaders(entityId) });
+    if (!response.ok) {
+      const err = await parseErrorMessage(response);
+      return { data: null, error: err, status: response.status };
+    }
+    return { data: null, error: null, status: response.status };
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? error.message : "Disconnect failed", status: null };
+  }
+}
+
 export async function sendChatMessage(message: string, entityId?: string): Promise<ApiResult<{ reply: string }>> {
   const url = `${resolveApiBaseUrl()}/chat`;
   try {
