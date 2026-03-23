@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarDays, BarChart2 } from 'lucide-react';
+import { CalendarDays, LayoutDashboard } from 'lucide-react';
 import { DashboardWidgets } from '@/components/dashboard/DashboardWidgets';
 import { SpendingCalendar } from '@/components/calendar/SpendingCalendar';
 import type { DashboardSummary, Transaction } from '@/types';
 
-type Tab = 'calendar' | 'charts';
+type Tab = 'dashboard' | 'calendar';
 
 interface Props {
   dashboard: DashboardSummary;
@@ -14,11 +14,11 @@ interface Props {
 }
 
 export function HomeClient({ dashboard, transactions }: Props) {
-  const [tab, setTab] = useState<Tab>('calendar');
+  const [tab, setTab] = useState<Tab>('dashboard');
 
   const tabs: { key: Tab; label: string; icon: typeof CalendarDays }[] = [
-    { key: 'calendar', label: 'カレンダー', icon: CalendarDays },
-    { key: 'charts',   label: 'チャート',   icon: BarChart2    },
+    { key: 'dashboard', label: 'ダッシュボード', icon: LayoutDashboard },
+    { key: 'calendar',  label: 'カレンダー',     icon: CalendarDays    },
   ];
 
   return (
@@ -45,11 +45,11 @@ export function HomeClient({ dashboard, transactions }: Props) {
         ))}
       </div>
 
+      {tab === 'dashboard' && (
+        <DashboardWidgets dashboard={dashboard} transactions={transactions} />
+      )}
       {tab === 'calendar' && (
         <SpendingCalendar initialMonth={dashboard.current_month} />
-      )}
-      {tab === 'charts' && (
-        <DashboardWidgets dashboard={dashboard} transactions={transactions} />
       )}
     </div>
   );

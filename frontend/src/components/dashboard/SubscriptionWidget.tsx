@@ -5,6 +5,22 @@ import { RefreshCw, ExternalLink } from 'lucide-react';
 import { getSubscriptions } from '@/lib/api';
 import type { SubscriptionItem, SubscriptionsResponse } from '@/types';
 
+// 有名サービスのemoji絵文字フォールバック（Clearbitが失敗した場合）
+const SERVICE_EMOJI: Record<string, string> = {
+  netflix: '🎬', spotify: '🎵', hulu: '📺', 'amazon prime': '📦',
+  'prime video': '📦', 'youtube premium': '▶️', 'youtube music': '🎵',
+  'apple music': '🎵', 'apple tv': '📺', 'apple one': '🍎',
+  disney: '🏰', dazn: '⚽', abema: '📱', 'u-next': '📺',
+  'amazon web': '☁️', aws: '☁️', 'google cloud': '☁️', azure: '☁️',
+  dropbox: '📦', 'google one': '🔵', icloud: '☁️', notion: '📝',
+  figma: '🎨', canva: '🎨', adobe: '🅰️', github: '💻', gitlab: '🦊',
+  slack: '💬', zoom: '🎥', teams: '💼', chatgpt: '🤖', openai: '🤖',
+  'microsoft 365': '💼', 'office 365': '💼', grammarly: '✍️',
+  duolingo: '🦜', headspace: '🧘', calm: '😌', peloton: '🚴',
+  '1password': '🔐', nordvpn: '🔒', audible: '🎧',
+  'kindle unlimited': '📚', scribd: '📖',
+};
+
 // ─── サービスアイコン ─────────────────────────────────────────────────────────
 
 function ServiceIcon({ item }: { item: SubscriptionItem }) {
@@ -15,45 +31,49 @@ function ServiceIcon({ item }: { item: SubscriptionItem }) {
     ? `https://logo.clearbit.com/${item.merchant_domain}`
     : null;
 
-  // 先頭文字アバター
   const initial = item.merchant.charAt(0).toUpperCase();
+  const merchantLower = item.merchant.toLowerCase();
+  const emoji = Object.entries(SERVICE_EMOJI).find(([k]) => merchantLower.includes(k))?.[1];
 
-  // ランダムっぽいが一貫したグラデーション色
   const colors = [
-    ['#6C5CE7', '#A29BFE'],
-    ['#E17055', '#FAB1A0'],
-    ['#00B894', '#55EFC4'],
-    ['#0984E3', '#74B9FF'],
-    ['#FDCB6E', '#E17055'],
-    ['#FD79A8', '#E84393'],
+    ['#6C5CE7', '#A29BFE'], ['#E17055', '#FAB1A0'], ['#00B894', '#55EFC4'],
+    ['#0984E3', '#74B9FF'], ['#FDCB6E', '#E17055'], ['#FD79A8', '#E84393'],
     ['#636E72', '#B2BEC3'],
   ];
-  const colorIdx = initial.charCodeAt(0) % colors.length;
-  const [from, to] = colors[colorIdx];
+  const [from, to] = colors[initial.charCodeAt(0) % colors.length];
+
+  // Clearbitロゴが正常に表示されている場合
+  if (logoUrl && imgOk) {
+    return (
+      <div
+        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden"
+        style={{ backgroundColor: '#fff' }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={logoUrl} alt={item.merchant} className="w-8 h-8 object-contain" />
+      </div>
+    );
+  }
 
   return (
     <div
-      className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden"
-      style={{ background: imgOk ? '#1E2030' : `linear-gradient(135deg, ${from}, ${to})` }}
+      className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden relative"
+      style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
     >
-      {logoUrl && !imgError ? (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={logoUrl}
-            alt={item.merchant}
-            className="w-8 h-8 object-contain rounded-lg"
-            style={{ display: imgOk ? 'block' : 'none' }}
-            onLoad={() => setImgOk(true)}
-            onError={() => setImgError(true)}
-          />
-          {!imgOk && (
-            <span className="text-sm font-bold text-white">{initial}</span>
-          )}
-        </>
-      ) : (
-        <span className="text-sm font-bold text-white">{initial}</span>
+      {/* バックグラウンドでClearbitを試みる */}
+      {logoUrl && !imgError && (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={logoUrl}
+          alt=""
+          className="absolute inset-0 w-full h-full object-contain opacity-0"
+          onLoad={() => setImgOk(true)}
+          onError={() => setImgError(true)}
+        />
       )}
+      <span className="text-base leading-none" role="img">
+        {emoji ?? initial}
+      </span>
     </div>
   );
 }
