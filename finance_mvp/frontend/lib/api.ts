@@ -31,6 +31,20 @@ export type MonthlyOverview = {
   duplicate_transaction_count: number;
 };
 
+export type SubscriptionServiceItem = {
+  merchant: string;
+  monthly_amount: number;
+  charge_count: number;
+  last_charge_date: string;
+  merchant_domain: string | null;
+  emoji: string | null;
+};
+
+export type SubscriptionsDetailResponse = {
+  subscriptions: SubscriptionServiceItem[];
+  total_monthly: number;
+};
+
 export type MonthlyHistoryItem = {
   month: string;
   spend: string;
@@ -225,6 +239,10 @@ export async function fetchMonthlyOverview(entityId?: string, year?: number, mon
   if (month) params.set("month", String(month));
   const query = params.toString() ? `?${params.toString()}` : "";
   return requestJson<MonthlyOverview>(`/analytics/monthly-overview${query}`, undefined, { entityId });
+}
+
+export async function fetchSubscriptions(entityId?: string): Promise<ApiResult<SubscriptionsDetailResponse>> {
+  return requestJson<SubscriptionsDetailResponse>("/analytics/subscriptions", undefined, { entityId });
 }
 
 export async function fetchInsights(entityId?: string, year?: number, month?: number): Promise<ApiResult<InsightItem[]>> {
