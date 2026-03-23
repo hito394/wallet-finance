@@ -204,6 +204,90 @@ export async function disconnectPlaidItem(item_id: string): Promise<void> {
   await request(`/api/plaid/items/${item_id}`, { method: 'DELETE' });
 }
 
+// ---- 口座・カード ----
+
+export async function getLinkedAccounts() {
+  return request<import('@/types').LinkedAccount[]>('/api/accounts');
+}
+
+export async function createLinkedAccount(data: import('@/types').LinkedAccountCreate) {
+  return request<import('@/types').LinkedAccount>('/api/accounts', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateLinkedAccount(id: number, data: Partial<import('@/types').LinkedAccountCreate & { is_active: boolean }>) {
+  return request<import('@/types').LinkedAccount>(`/api/accounts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteLinkedAccount(id: number) {
+  return request<{ ok: boolean }>(`/api/accounts/${id}`, { method: 'DELETE' });
+}
+
+export async function getAccountSummary(id: number, month?: string) {
+  const q = month ? `?month=${month}` : '';
+  return request<import('@/types').AccountSummary>(`/api/accounts/${id}/summary${q}`);
+}
+
+export async function getAccountImports(id: number) {
+  return request<import('@/types').AccountImport[]>(`/api/accounts/${id}/imports`);
+}
+
+export async function linkImportToAccount(accountId: number, importId: number) {
+  return request<{ ok: boolean }>(`/api/accounts/${accountId}/imports/${importId}`, { method: 'POST' });
+}
+
+export async function unlinkImportFromAccount(accountId: number, importId: number) {
+  return request<{ ok: boolean }>(`/api/accounts/${accountId}/imports/${importId}`, { method: 'DELETE' });
+}
+
+// ---- 支出目標 ----
+
+export async function getGoals() {
+  return request<import('@/types').SpendingGoal[]>('/api/goals');
+}
+
+export async function createGoal(data: import('@/types').SpendingGoalCreate) {
+  return request<import('@/types').SpendingGoal>('/api/goals', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateGoal(id: number, data: { target_amount?: number; is_recurring?: boolean }) {
+  return request<import('@/types').SpendingGoal>(`/api/goals/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteGoal(id: number) {
+  return request<{ ok: boolean }>(`/api/goals/${id}`, { method: 'DELETE' });
+}
+
+// ---- サブスクリプション ----
+
+export async function getSubscriptions() {
+  return request<import('@/types').SubscriptionsResponse>('/api/goals/subscriptions');
+}
+
+// ---- 目標 vs 実績 ----
+
+export async function getGoalVsActual(params: { category?: string; months?: number } = {}) {
+  const qs = new URLSearchParams(
+    Object.entries(params)
+      .filter(([, v]) => v !== undefined)
+      .map(([k, v]) => [k, String(v)])
+  ).toString();
+  return request<import('@/types').GoalVsActualResponse>(
+    `/api/goals/vs-actual${qs ? '?' + qs : ''}`
+  );
+}
+
 export const CATEGORY_COLORS: Record<string, string> = {
   food_dining:    '#FF6B6B',
   grocery:        '#FF8C42',

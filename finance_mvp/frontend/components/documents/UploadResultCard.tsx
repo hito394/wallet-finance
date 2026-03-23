@@ -11,36 +11,35 @@ type Props = {
 };
 
 export default function UploadResultCard({ doc, onDismiss }: Props) {
+  const isFailed = doc.parsing_status === "failed";
+  const isReview = doc.parsing_status === "needs_review";
+
+  const cardStyle = isFailed
+    ? { border: "1px solid #ef444466", background: "#fef2f2" }
+    : isReview
+    ? { border: "1px solid #f59e0b66", background: "#fffbeb" }
+    : { border: "1px solid #22c55e66", background: "#f0fdf4" };
+
+  const headerColor = isFailed ? "#991b1b" : isReview ? "#92400e" : "#15803d";
+  const headerIcon = isFailed ? "✕" : isReview ? "⚠" : "✓";
+  const headerText = isFailed
+    ? "処理に失敗しました — Source Type を手動で指定して再アップロードしてください"
+    : isReview
+    ? "Document requires review"
+    : "Document processed";
+
   return (
-    <div
-      style={{
-        border: "1px solid #22c55e66",
-        borderRadius: 8,
-        background: "#f0fdf4",
-        padding: "16px 20px",
-        marginTop: 12,
-        position: "relative",
-      }}
-    >
+    <div style={{ borderRadius: 8, padding: "16px 20px", marginTop: 12, position: "relative", ...cardStyle }}>
       <button
         onClick={onDismiss}
-        style={{
-          position: "absolute",
-          top: 10,
-          right: 12,
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          fontSize: 16,
-          color: "#64748b",
-        }}
+        style={{ position: "absolute", top: 10, right: 12, background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#64748b" }}
         aria-label="Dismiss"
       >
         ✕
       </button>
 
-      <div style={{ fontWeight: 700, fontSize: 14, color: "#15803d", marginBottom: 10 }}>
-        ✓ Document processed
+      <div style={{ fontWeight: 700, fontSize: 14, color: headerColor, marginBottom: 10 }}>
+        {headerIcon} {headerText}
       </div>
 
       <div

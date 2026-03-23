@@ -30,10 +30,39 @@ CATEGORY_RULES: list[tuple[str, list[str]]] = [
     ]),
     # ---------- サブスクリプション ----------
     ("subscriptions", [
-        "netflix", "NETFLIX", "spotify", "SPOTIFY", "amazon prime",
-        "apple one", "youtube premium", "hulu", "disney", "dazn",
-        "adobe", "microsoft 365", "dropbox", "chatgpt",
-        "月額", "年額", "定期",
+        # 動画・音楽ストリーミング
+        "netflix", "spotify", "hulu", "dazn", "disney", "disney+",
+        "apple tv", "apple music", "apple one", "youtube premium",
+        "youtube music", "amazon prime", "prime video", "peacock",
+        "paramount", "max hbo", "espn+", "starz", "showtime",
+        "abema", "niconico", "nicovideo", "u-next", "unext", "dtv",
+        "rakuten tv", "plex", "tidal", "deezer", "pandora", "iheartradio",
+        # ツール・クラウド
+        "adobe", "photoshop", "illustrator", "creative cloud",
+        "microsoft 365", "office 365", "dropbox", "google one",
+        "icloud", "box.com", "notion", "figma", "canva", "sketch",
+        "github", "gitlab", "bitbucket", "vercel", "heroku",
+        "aws ", "amazon web", "google cloud", "azure",
+        "chatgpt", "openai", "claude", "midjourney",
+        "grammarly", "duolingo", "headspace", "calm",
+        "1password", "lastpass", "nordvpn", "expressvpn",
+        # コミュニケーション・業務
+        "slack", "zoom", "teams", "webex", "loom",
+        "monday.com", "asana", "trello", "jira", "basecamp",
+        "hubspot", "salesforce", "zendesk",
+        # ゲーム
+        "xbox game pass", "playstation plus", "ps plus",
+        "nintendo switch online", "steam", "epic games",
+        "ea play", "ubisoft",
+        # フィットネス・ライフスタイル
+        "peloton", "fitbit", "noom", "weightwatchers",
+        # ニュース・読書
+        "new york times", "wall street journal", "bloomberg",
+        "audible", "kindle unlimited", "scribd",
+        # 日本語キーワード
+        "月額", "年額", "定期", "月額料金", "年額料金",
+        "定期購読", "定期課金", "自動更新", "サブスク",
+        "月会費", "年会費",
     ]),
     # ---------- 交通 ----------
     ("transportation", [

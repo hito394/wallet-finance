@@ -28,6 +28,7 @@ export type MonthlyOverview = {
   category_breakdown: { category: string; total: string }[];
   detected_subscriptions: string[];
   alerts: string[];
+  duplicate_transaction_count: number;
 };
 
 export type MonthlyHistoryItem = {
@@ -72,6 +73,11 @@ export type TransactionUpdatePayload = {
   notes?: string | null;
   is_ignored?: boolean;
   receipt_id?: string | null;
+  transaction_date?: string;
+  amount?: number;
+  merchant_raw?: string;
+  description?: string;
+  direction?: "debit" | "credit" | "transfer";
 };
 
 export type DocumentItem = {

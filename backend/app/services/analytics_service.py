@@ -185,7 +185,8 @@ class AnalyticsService:
         return (await self.db.execute(stmt)).scalar_one()
 
     async def _count_possible_duplicates(self, user_id: int) -> int:
-        subq = (
+        # ── 1. ハッシュ完全一致グループ数 ──
+        exact_subq = (
             select(Transaction.dedup_hash)
             .where(
                 Transaction.user_id == user_id,
@@ -194,8 +195,52 @@ class AnalyticsService:
             .group_by(Transaction.dedup_hash)
             .having(func.count(Transaction.id) > 1)
         )
-        result = await self.db.execute(subq)
-        return len(result.all())
+        exact_result = await self.db.execute(exact_subq)
+        exact_hashes = {row[0] for row in exact_result.all()}
+        exact_count = len(exact_hashes)
+
+        # ── 2. ファジー重複ペア数（同金額・方向・±3日・異なるハッシュ） ──
+        all_stmt = (
+            select(Transaction)
+            .where(
+                Transaction.user_id == user_id,
+                Transaction.is_ignored == False,  # noqa: E712
+            )
+            .order_by(Transaction.amount, Transaction.direction, Transaction.transaction_date)
+        )
+        all_txs = (await self.db.execute(all_stmt)).scalars().all()
+
+        # Collect IDs already counted in exact groups
+        exact_id_subq = (
+            select(Transaction.id)
+            .where(
+                Transaction.user_id == user_id,
+                Transaction.dedup_hash.in_(exact_hashes),
+            )
+        )
+        exact_ids_result = await self.db.execute(exact_id_subq)
+        exact_ids = {row[0] for row in exact_ids_result.all()}
+
+        fuzzy_count = 0
+        seen_pairs: set[frozenset] = set()
+        for i, tx1 in enumerate(all_txs):
+            if tx1.id in exact_ids:
+                continue
+            for j in range(i + 1, len(all_txs)):
+                tx2 = all_txs[j]
+                if tx2.amount != tx1.amount or tx2.direction != tx1.direction:
+                    break
+                date_diff = (tx2.transaction_date - tx1.transaction_date).days
+                if date_diff > 3:
+                    break
+                if tx2.id in exact_ids:
+                    continue
+                pair = frozenset([tx1.id, tx2.id])
+                if pair not in seen_pairs:
+                    seen_pairs.add(pair)
+                    fuzzy_count += 1
+
+        return exact_count + fuzzy_count
 
     async def _count_imports(self, user_id: int) -> int:
         stmt = select(func.count()).select_from(ImportRecord).where(

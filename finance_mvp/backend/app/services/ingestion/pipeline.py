@@ -13,7 +13,12 @@ from app.models.review_queue import ReviewQueueItem
 from app.models.transaction import Transaction
 from app.services.analytics.review_queue_rules import derive_review_reason
 from app.services.categorization.engine import categorize_transaction
-from app.services.dedupe.duplicate_detector import find_duplicate_by_fingerprint, find_duplicate_by_cross_source
+from app.services.dedupe.duplicate_detector import (
+    find_duplicate_by_fingerprint,
+    find_duplicate_by_cross_source,
+    find_duplicate_by_date_amount_direction,
+    scan_cross_source_payments,
+)
 from app.services.document_intelligence.pipeline import analyze_financial_document
 from app.services.matching.receipt_transaction_matcher import match_receipt_to_transactions
 from app.services.matching.document_cross_validator import cross_validate_document_with_transactions
@@ -69,6 +74,7 @@ def process_import(
     local_file_path: str,
     *,
     force_reprocess: bool = False,
+    skip_dedup: bool = False,
 ) -> None:
     job.status = ImportStatus.processing
     job.processed_at = None
@@ -306,24 +312,34 @@ def process_import(
                 )
 
                 duplicate = None
-                if item.external_txn_id:
-                    duplicate = db.scalar(
-                        select(Transaction).where(
-                            Transaction.entity_id == job.entity_id,
-                            Transaction.external_txn_id == item.external_txn_id,
+                if not skip_dedup:
+                    if item.external_txn_id:
+                        duplicate = db.scalar(
+                            select(Transaction).where(
+                                Transaction.entity_id == job.entity_id,
+                                Transaction.external_txn_id == item.external_txn_id,
+                            )
                         )
-                    )
-                if duplicate is None:
-                    duplicate = find_duplicate_by_fingerprint(db, job.entity_id, fingerprint)
-                if duplicate is None:
-                    duplicate = find_duplicate_by_cross_source(
-                        db,
-                        job.entity_id,
-                        item.transaction_date,
-                        item.amount,
-                        item.source,
-                        item.description,
-                    )
+                    if duplicate is None:
+                        duplicate = find_duplicate_by_fingerprint(db, job.entity_id, fingerprint)
+                    if duplicate is None:
+                        duplicate = find_duplicate_by_cross_source(
+                            db,
+                            job.entity_id,
+                            item.transaction_date,
+                            item.amount,
+                            item.source,
+                            item.description,
+                        )
+                    if duplicate is None:
+                        duplicate = find_duplicate_by_date_amount_direction(
+                            db,
+                            job.entity_id,
+                            item.transaction_date,
+                            item.amount,
+                            item.direction,
+                            job.id,
+                        )
                 if duplicate:
                     if duplicate.import_id == job.id:
                         same_import_existing_count += 1
@@ -383,16 +399,12 @@ def process_import(
                         "low_confidence_statement_extraction: "
                         "Transactions extracted but parser confidence is low"
                     )
-                elif duplicate_count > 0 or created_count < parsed_row_count:
-                    document.parsing_status = "partial"
-                    document.parsing_failure_reason = (
-                        "partial_statement_parse: "
-                        "Some rows were skipped as duplicates or could not be saved"
-                    )
                 else:
+                    # Duplicate rows being skipped is expected deduplication behavior,
+                    # not a parsing error — mark the document as fully parsed.
                     document.parsing_status = "parsed"
                     document.parsing_failure_reason = None
-            elif parsed_row_count > 0 and created_count == 0 and same_import_existing_count > 0:
+            elif parsed_row_count > 0 and created_count == 0 and (same_import_existing_count > 0 or duplicate_count > 0):
                 document.parsing_status = "parsed"
                 document.parsing_failure_reason = None
             elif parsed_row_count > 0 and created_count == 0:
@@ -499,6 +511,11 @@ def process_import(
             # are downgraded to needs_review.
             if document.parsing_status == "parsed":
                 document.parsing_status = "needs_review"
+
+        # After importing bank/card statements, retroactively mark cross-source
+        # payment credits as ignored to prevent bank debit + CC payment double-count.
+        if job.source_type in {ImportSourceType.bank_statement, ImportSourceType.credit_card_statement}:
+            scan_cross_source_payments(db, job.entity_id)
 
         job.status = ImportStatus.completed
         job.processed_at = datetime.utcnow()

@@ -113,3 +113,99 @@ export interface DashboardSummary {
 }
 
 export type TransactionDirection = 'debit' | 'credit';
+
+// ── 口座・カード ──────────────────────────────────────────────────────────────
+
+export type AccountType = 'checking' | 'savings' | 'credit' | 'debit' | 'prepaid' | 'investment' | 'other';
+
+export interface LinkedAccount {
+  id: number;
+  user_id: number;
+  name: string;
+  institution: string;
+  account_type: AccountType;
+  last4: string | null;
+  color: string;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LinkedAccountCreate {
+  name: string;
+  institution: string;
+  account_type: AccountType;
+  last4?: string;
+  color: string;
+  notes?: string;
+}
+
+export interface AccountSummary {
+  account: LinkedAccount;
+  month_expense: string;
+  month_income: string;
+  month_net: string;
+  month_transaction_count: number;
+  total_import_count: number;
+  last_import_at: string | null;
+}
+
+export interface AccountImport {
+  id: number;
+  original_filename: string;
+  import_type: string;
+  status: string;
+  success_rows: number;
+  created_at: string;
+}
+
+// ── 支出目標 ──────────────────────────────────────────────────────────────────
+
+export interface SpendingGoal {
+  id: number;
+  user_id: number;
+  category: string | null;
+  month: string | null;
+  target_amount: string;
+  is_recurring: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SpendingGoalCreate {
+  category: string | null;
+  month: string | null;
+  target_amount: number;
+  is_recurring: boolean;
+}
+
+// ── サブスクリプション ─────────────────────────────────────────────────────────
+
+export interface SubscriptionItem {
+  merchant: string;
+  merchant_domain: string | null;
+  monthly_amount: string;
+  last_charge_date: string;
+  charge_count: number;
+  category: string;
+}
+
+export interface SubscriptionsResponse {
+  subscriptions: SubscriptionItem[];
+  total_monthly: string;
+}
+
+// ── 目標 vs 実績 ──────────────────────────────────────────────────────────────
+
+export interface GoalVsActualPoint {
+  month: string;
+  actual: string;
+  goal: string | null;
+}
+
+export interface GoalVsActualResponse {
+  points: GoalVsActualPoint[];
+  category: string | null;
+  target_amount: string | null;
+}

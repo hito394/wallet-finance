@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     RECEIPT_MATCH_AMOUNT_TOLERANCE: float = 0.01  # 金額の許容誤差（円）
     RECEIPT_MATCH_DATE_TOLERANCE_DAYS: int = 3    # 日付の許容誤差（日）
 
+    # Plaid設定（米国の銀行連携）
+    PLAID_CLIENT_ID: str = ""
+    PLAID_SECRET: str = ""
+    PLAID_ENV: str = "sandbox"  # sandbox / development / production
+
     @field_validator("CORS_ALLOW_ORIGINS", "TRUSTED_HOSTS", mode="before")
     @classmethod
     def _parse_csv_list(cls, value):

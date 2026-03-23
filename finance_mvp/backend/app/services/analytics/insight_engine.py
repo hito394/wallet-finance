@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.category import Category
 from app.models.transaction import Transaction, TransactionDirection
 from app.schemas.analytics import InsightItem, MonthlyHistoryItem, MonthlyCategorySpend, MonthlyOverview
+from app.services.dedupe.duplicate_detector import count_fuzzy_duplicates
 
 
 def monthly_overview(db: Session, entity_id, year: int, month: int) -> MonthlyOverview:
@@ -57,6 +58,8 @@ def monthly_overview(db: Session, entity_id, year: int, month: int) -> MonthlyOv
     if any(c.total > Decimal("1000") for c in category_breakdown):
         alerts.append("One category exceeded 1000 this month.")
 
+    duplicate_count = count_fuzzy_duplicates(db, entity_id)
+
     return MonthlyOverview(
         month=f"{year:04d}-{month:02d}",
         total_spend=spend,
@@ -65,6 +68,7 @@ def monthly_overview(db: Session, entity_id, year: int, month: int) -> MonthlyOv
         category_breakdown=category_breakdown,
         detected_subscriptions=detected_subscriptions,
         alerts=alerts,
+        duplicate_transaction_count=duplicate_count,
     )
 
 

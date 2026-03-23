@@ -90,6 +90,7 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
         </div>
       </div>
 
+
       <div className="toolbar">
         <button
           type="button"
@@ -110,20 +111,10 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
               return;
             }
 
-            const reused = uploadResult.data.metadata_json?.idempotent_reuse === true;
-            if (reused) {
-              const originalName = uploadResult.data.file_name;
-              setInfo(
-                originalName && originalName !== file.name
-                  ? `Duplicate content detected. Reused existing upload: ${originalName}.`
-                  : "Duplicate content detected. Reused existing upload result.",
-              );
-            }
-
             const jobId = uploadResult.data.id;
 
-            // Step 2: poll until job completes (up to 15 s)
-            const jobResult = await pollImportJob(jobId, entityId, 15_000);
+            // Step 2: poll until job completes (up to 30 s)
+            const jobResult = await pollImportJob(jobId, entityId, 30_000);
 
             // Step 3: regardless of job success/fail, fetch the document for this import
             const docsResult = await fetchDocumentsByImportId(jobId, entityId);
@@ -135,6 +126,12 @@ export default function DocumentsUploadForm({ entityId, onUploaded }: Props) {
 
             if (jobResult.data?.status === "failed" && !doc) {
               setError(jobResult.data.error_message || "Processing failed — no document was created.");
+            } else if (!doc && jobResult.data?.status !== "completed") {
+              setError(
+                jobResult.data?.status === "failed"
+                  ? jobResult.data.error_message || "Processing failed."
+                  : "処理に時間がかかっています。しばらくしてからページを更新してください。"
+              );
             }
 
             onUploaded?.();

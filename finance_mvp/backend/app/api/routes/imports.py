@@ -222,49 +222,6 @@ def upload_import(
     else:
         resolved_source_type = _infer_source_type_from_content(destination, safe_name) or _infer_source_type(safe_name)
 
-    # Idempotency guard: same entity + source_type + content hash reuses the
-    # existing import job to avoid duplicate document/transaction rows.
-    existing = db.scalar(
-        select(ImportJob)
-        .where(
-            ImportJob.entity_id == entity.id,
-            ImportJob.source_type == resolved_source_type,
-            ImportJob.file_hash == file_hash,
-        )
-        .order_by(ImportJob.created_at.desc())
-    )
-
-    if existing and existing.status in {ImportStatus.pending, ImportStatus.processing, ImportStatus.completed}:
-        existing_document = db.scalar(
-            select(FinancialDocument)
-            .where(
-                FinancialDocument.entity_id == entity.id,
-                FinancialDocument.import_id == existing.id,
-            )
-            .order_by(FinancialDocument.created_at.desc())
-        )
-        # Reuse should not lock users into a failed parse result.
-        if existing_document and existing_document.parsing_status == "failed":
-            existing = None
-
-    if existing and existing.status in {ImportStatus.pending, ImportStatus.processing, ImportStatus.completed}:
-        # Best-effort cleanup: this request uploaded a duplicate payload, so we
-        # can discard the newly written temporary file.
-        try:
-            destination.unlink(missing_ok=True)
-        except Exception:
-            pass
-
-        existing.metadata_json = {
-            **(existing.metadata_json or {}),
-            "idempotent_reuse": True,
-            "reused_upload_file_name": safe_name,
-        }
-        db.add(existing)
-        db.commit()
-        db.refresh(existing)
-        return existing
-
     job = ImportJob(
         user_id=user.id,
         entity_id=entity.id,

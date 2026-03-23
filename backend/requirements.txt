@@ -33,6 +33,9 @@ numpy==1.26.4
 # === Fuzzy Matching ===
 rapidfuzz==3.6.1
 
+# === Plaid ===
+plaid-python==17.0.0
+
 # === HTTP / Testing ===
 httpx==0.26.0
 pytest==8.0.0
