@@ -175,7 +175,7 @@ export default function HomeWidgets({ overview, transactions, history, selectedM
       {/* ── Row 2: Cash Flow + 円グラフ ── */}
       <div style={{ display: "grid", gap: 20, gridTemplateColumns: "1fr 1fr" }}>
         <CashFlowCard overview={overview} />
-        <SpendingPieChart data={(overview?.category_breakdown ?? []).filter(c => !["income", "transfer", "Income", "Transfer", "Transfers"].includes(c.category))} />
+        <SpendingPieChart data={(overview?.category_breakdown ?? []).filter(c => !["income", "transfer", "Income", "Transfer", "Transfers"].includes(c.category))} transactions={transactions} entityId={entityId} />
       </div>
 
       {/* ── Row 3: トレンドチャート + サブスク ── */}

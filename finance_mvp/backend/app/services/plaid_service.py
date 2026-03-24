@@ -87,6 +87,7 @@ def create_link_token(user_id: str) -> str:
         products=[Products("transactions")],
         client_name="Wallet Finance",
         country_codes=[CountryCode("US")],
+        language="en",
         user=LinkTokenCreateRequestUser(client_user_id=user_id),
     )
     resp = client.link_token_create(req)

@@ -72,7 +72,7 @@ function ServiceIcon({ item }: { item: SubscriptionServiceItem }) {
   const [imgErr, setImgErr] = useState(false);
 
   const domain = guessDomain(item.merchant, item.merchant_domain);
-  const logoUrl = domain ? `https://logo.clearbit.com/${domain}` : null;
+  const logoUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : null;
 
   const colors = [
     ["#6C5CE7", "#A29BFE"], ["#E17055", "#FAB1A0"], ["#00B894", "#55EFC4"],
