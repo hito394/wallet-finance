@@ -31,6 +31,19 @@ export type MonthlyOverview = {
   duplicate_transaction_count: number;
 };
 
+export type SubscriptionServiceItem = {
+  merchant: string;
+  monthly_amount: number;
+  charge_count: number;
+  last_charge_date: string;
+  merchant_domain: string | null;
+};
+
+export type SubscriptionsDetailResponse = {
+  subscriptions: SubscriptionServiceItem[];
+  total_monthly: number;
+};
+
 export type MonthlyHistoryItem = {
   month: string;
   spend: string;
@@ -225,6 +238,10 @@ export async function fetchMonthlyOverview(entityId?: string, year?: number, mon
   if (month) params.set("month", String(month));
   const query = params.toString() ? `?${params.toString()}` : "";
   return requestJson<MonthlyOverview>(`/analytics/monthly-overview${query}`, undefined, { entityId });
+}
+
+export async function fetchSubscriptions(entityId?: string): Promise<ApiResult<SubscriptionsDetailResponse>> {
+  return requestJson<SubscriptionsDetailResponse>("/analytics/subscriptions", undefined, { entityId });
 }
 
 export async function fetchInsights(entityId?: string, year?: number, month?: number): Promise<ApiResult<InsightItem[]>> {
@@ -453,6 +470,68 @@ export async function downloadAccountingCsv(entityId?: string): Promise<ApiResul
   } catch (error) {
     const message = error instanceof Error ? error.message : "Download failed";
     return { data: null, error: message, status: null };
+  }
+}
+
+// ── Plaid ──────────────────────────────────────────────────────────────────
+
+export type BankAccountItem = {
+  id: string;
+  plaid_account_id: string;
+  name: string;
+  official_name: string | null;
+  account_type: string | null;
+  account_subtype: string | null;
+  mask: string | null;
+  currency: string;
+  current_balance: number | null;
+  available_balance: number | null;
+  last_synced_at: string | null;
+};
+
+export type PlaidItemOut = {
+  id: string;
+  institution_name: string;
+  institution_id: string | null;
+  last_synced_at: string | null;
+  accounts: BankAccountItem[];
+};
+
+export async function fetchPlaidLinkToken(entityId?: string): Promise<ApiResult<{ link_token: string; plaid_env: string }>> {
+  return requestJson<{ link_token: string; plaid_env: string }>("/plaid/link-token", undefined, { entityId });
+}
+
+export async function exchangePlaidToken(publicToken: string, entityId?: string): Promise<ApiResult<{ item_id: string; institution_name: string; message: string }>> {
+  return requestJson<{ item_id: string; institution_name: string; message: string }>(
+    "/plaid/exchange",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ public_token: publicToken }) },
+    { entityId },
+  );
+}
+
+export async function fetchPlaidAccounts(entityId?: string): Promise<ApiResult<{ items: PlaidItemOut[] }>> {
+  return requestJson<{ items: PlaidItemOut[] }>("/plaid/accounts", undefined, { entityId });
+}
+
+export async function syncPlaidItem(itemId: string, entityId?: string): Promise<ApiResult<{ added: number; modified: number; removed: number }>> {
+  return requestJson<{ added: number; modified: number; removed: number }>(
+    `/plaid/sync/${encodeURIComponent(itemId)}`,
+    { method: "POST" },
+    { entityId },
+  );
+}
+
+export async function disconnectPlaidItem(itemId: string, entityId?: string): Promise<ApiResult<null>> {
+  const url = `${resolveApiBaseUrl()}/plaid/items/${encodeURIComponent(itemId)}`;
+  try {
+    const response = await fetch(url, { method: "DELETE", headers: entityHeaders(entityId) });
+    if (!response.ok) {
+      const err = await parseErrorMessage(response);
+      return { data: null, error: err, status: response.status };
+    }
+    return { data: null, error: null, status: response.status };
+  } catch (error) {
+    return { data: null, error: error instanceof Error ? error.message : "Disconnect failed", status: null };
   }
 }
 

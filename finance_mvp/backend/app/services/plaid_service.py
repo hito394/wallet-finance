@@ -86,8 +86,7 @@ def create_link_token(user_id: str) -> str:
     req = LinkTokenCreateRequest(
         products=[Products("transactions")],
         client_name="Wallet Finance",
-        country_codes=[CountryCode("US"), CountryCode("JP")],
-        language="ja",
+        country_codes=[CountryCode("US")],
         user=LinkTokenCreateRequestUser(client_user_id=user_id),
     )
     resp = client.link_token_create(req)
@@ -128,7 +127,7 @@ def exchange_public_token(
             inst_resp = client.institutions_get_by_id(
                 InstitutionsGetByIdRequest(
                     institution_id=institution_id,
-                    country_codes=[CountryCode("US"), CountryCode("JP")],
+                    country_codes=[CountryCode("US")],
                 )
             )
             institution_name = inst_resp["institution"]["name"]
