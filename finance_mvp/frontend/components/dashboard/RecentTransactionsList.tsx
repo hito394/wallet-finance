@@ -98,7 +98,7 @@ const MERCHANT_DOMAIN_MAP: Record<string, string> = {
   "yodobashi": "yodobashi.com", "bic camera": "biccamera.com", "yamada": "yamada-denki.co.jp",
   "ito-yokado": "itoyokado.com", "aeon": "aeon.co.jp", "seven eleven": "sej.co.jp",
   "lawson": "lawson.co.jp", "familymart": "family.co.jp", "ministop": "ministop.co.jp",
-  "don quijote": "donki.com", "donki": "donki.com", "uniqlo": "uniqlo.com",
+  "don quijote": "donki.com", "donki": "donki.com",
   "nitori": "nitori.co.jp", "ikea": "ikea.com", "muji": "muji.com",
   // Japan – Food
   "yoshinoya": "yoshinoya.com", "matsuya": "matsuyafoods.co.jp",
@@ -149,7 +149,7 @@ const MERCHANT_DOMAIN_MAP: Record<string, string> = {
   "nikkei": "nikkei.com", "asahi": "asahi.com",
   // Global – Gaming / Entertainment
   "playstore": "play.google.com", "app store": "apple.com",
-  "netflix": "netflix.com", "amazon music": "music.amazon.com",
+  "amazon music": "music.amazon.com",
 };
 
 function guessDomain(name: string): string | null {
