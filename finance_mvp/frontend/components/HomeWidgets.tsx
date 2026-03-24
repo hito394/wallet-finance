@@ -172,11 +172,10 @@ export default function HomeWidgets({ overview, transactions, history, selectedM
       {/* ── アラート ── */}
       <AlertsWidget alerts={alerts} dupCount={dupCount} />
 
-      {/* ── Row 2: Cash Flow + 円グラフ + カテゴリ横棒 ── */}
-      <div style={{ display: "grid", gap: 20, gridTemplateColumns: "2fr 2fr 1.5fr" }}>
+      {/* ── Row 2: Cash Flow + 円グラフ ── */}
+      <div style={{ display: "grid", gap: 20, gridTemplateColumns: "1fr 1fr" }}>
         <CashFlowCard overview={overview} />
         <SpendingPieChart data={(overview?.category_breakdown ?? []).filter(c => !["income", "transfer", "Income", "Transfer", "Transfers"].includes(c.category))} />
-        <CategoryBarsWidget breakdown={overview?.category_breakdown ?? []} />
       </div>
 
       {/* ── Row 3: トレンドチャート + サブスク ── */}

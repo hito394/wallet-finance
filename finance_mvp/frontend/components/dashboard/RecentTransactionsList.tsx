@@ -16,56 +16,146 @@ const PALETTE = [
 ];
 
 const MERCHANT_DOMAIN_MAP: Record<string, string> = {
-  "amazon": "amazon.com", "amazon prime": "amazon.com",
-  "netflix": "netflix.com", "spotify": "spotify.com",
-  "hulu": "hulu.com", "disney": "disneyplus.com",
-  "youtube": "youtube.com", "apple": "apple.com",
-  "google": "google.com", "microsoft": "microsoft.com",
-  "adobe": "adobe.com", "dropbox": "dropbox.com",
-  "notion": "notion.so", "slack": "slack.com",
-  "figma": "figma.com", "canva": "canva.com",
-  "zoom": "zoom.us", "github": "github.com",
-  "openai": "openai.com", "chatgpt": "openai.com",
-  "uber": "uber.com", "lyft": "lyft.com",
-  "airbnb": "airbnb.com", "booking": "booking.com",
-  "starbucks": "starbucks.com", "mcdonald": "mcdonalds.com",
-  "target": "target.com", "walmart": "walmart.com",
-  "costco": "costco.com", "whole foods": "wholefoods.com",
-  "paypal": "paypal.com", "venmo": "venmo.com",
-  "stripe": "stripe.com", "shopify": "shopify.com",
-  "rakuten": "rakuten.co.jp", "nintendo": "nintendo.com",
-  "playstation": "playstation.com", "xbox": "xbox.com",
-  "nordvpn": "nordvpn.com", "grammarly": "grammarly.com",
-  "duolingo": "duolingo.com", "docomo": "docomo.ne.jp",
-  "softbank": "softbank.jp",
-};
-
-const MERCHANT_EMOJI: Record<string, string> = {
-  "amazon": "📦", "netflix": "🎬", "spotify": "🎵",
-  "hulu": "📺", "disney": "🏰", "youtube": "▶️",
-  "apple": "🍎", "google": "🔵", "microsoft": "💼",
-  "adobe": "🅰️", "notion": "📝", "slack": "💬",
-  "figma": "🎨", "canva": "🎨", "zoom": "🎥",
-  "github": "💻", "openai": "🤖", "chatgpt": "🤖",
-  "uber": "🚗", "lyft": "🚗", "airbnb": "🏠",
-  "starbucks": "☕", "mcdonald": "🍔",
-  "target": "🎯", "walmart": "🛒", "costco": "🏬",
-  "nintendo": "🎮", "playstation": "🕹️", "xbox": "🎮",
-  "duolingo": "🦜", "paypal": "💳",
+  // US – EC / Retail
+  "amazon": "amazon.com", "amazon prime": "amazon.com", "whole foods": "wholefoodsmarket.com",
+  "walmart": "walmart.com", "target": "target.com", "costco": "costco.com",
+  "best buy": "bestbuy.com", "home depot": "homedepot.com", "lowes": "lowes.com",
+  "cvs": "cvs.com", "walgreens": "walgreens.com", "kroger": "kroger.com",
+  "trader joe": "traderjoes.com", "h-e-b": "heb.com", "heb": "heb.com",
+  "publix": "publix.com", "safeway": "safeway.com", "albertsons": "albertsons.com",
+  "dollar general": "dollargeneral.com", "dollar tree": "dollartree.com",
+  "tjmaxx": "tjmaxx.com", "tj maxx": "tjmaxx.com", "marshalls": "marshalls.com",
+  "ross": "rossstores.com", "nordstrom": "nordstrom.com", "macy": "macys.com",
+  "gap": "gap.com", "h&m": "hm.com", "zara": "zara.com", "uniqlo": "uniqlo.com",
+  "nike": "nike.com", "adidas": "adidas.com", "under armour": "underarmour.com",
+  "etsy": "etsy.com", "ebay": "ebay.com", "wayfair": "wayfair.com",
+  "chewy": "chewy.com", "petsmart": "petsmart.com",
+  // US – Food / Restaurants
+  "starbucks": "starbucks.com", "mcdonald": "mcdonalds.com", "chick-fil-a": "chick-fil-a.com",
+  "chickfila": "chick-fil-a.com", "chipotle": "chipotle.com", "subway": "subway.com",
+  "taco bell": "tacobell.com", "burger king": "burgerking.com", "wendy": "wendys.com",
+  "domino": "dominos.com", "pizza hut": "pizzahut.com", "panera": "panerabread.com",
+  "dunkin": "dunkindonuts.com", "doordash": "doordash.com", "grubhub": "grubhub.com",
+  "ubereats": "ubereats.com", "instacart": "instacart.com", "postmates": "postmates.com",
+  "five guys": "fiveguys.com", "shake shack": "shakeshack.com", "wingstop": "wingstop.com",
+  "olive garden": "olivegarden.com", "applebee": "applebees.com", "ihop": "ihop.com",
+  "denny": "dennys.com",
+  // US – Streaming / Entertainment
+  "netflix": "netflix.com", "hulu": "hulu.com", "disney": "disneyplus.com",
+  "hbo": "hbomax.com", "max": "max.com", "peacock": "peacocktv.com",
+  "paramount": "paramountplus.com", "apple tv": "apple.com", "espn": "espnplus.com",
+  "crunchyroll": "crunchyroll.com", "funimation": "funimation.com",
+  // US – Music / Podcast
+  "spotify": "spotify.com", "apple music": "apple.com", "tidal": "tidal.com",
+  "pandora": "pandora.com", "audible": "audible.com", "sirius": "siriusxm.com",
+  // US – Tech / SaaS
+  "apple": "apple.com", "google": "google.com", "microsoft": "microsoft.com",
+  "adobe": "adobe.com", "dropbox": "dropbox.com", "notion": "notion.so",
+  "slack": "slack.com", "figma": "figma.com", "canva": "canva.com",
+  "zoom": "zoom.us", "github": "github.com", "openai": "openai.com",
+  "chatgpt": "openai.com", "anthropic": "anthropic.com", "claude": "anthropic.com",
+  "grammarly": "grammarly.com", "duolingo": "duolingo.com", "nordvpn": "nordvpn.com",
+  "expressvpn": "expressvpn.com", "lastpass": "lastpass.com", "1password": "1password.com",
+  "evernote": "evernote.com", "trello": "trello.com", "asana": "asana.com",
+  "monday": "monday.com", "airtable": "airtable.com", "webflow": "webflow.com",
+  "squarespace": "squarespace.com", "wix": "wix.com", "shopify": "shopify.com",
+  "hubspot": "hubspot.com", "salesforce": "salesforce.com", "zendesk": "zendesk.com",
+  "mailchimp": "mailchimp.com", "twilio": "twilio.com", "stripe": "stripe.com",
+  "heroku": "heroku.com", "digitalocean": "digitalocean.com", "linode": "linode.com",
+  "cloudflare": "cloudflare.com", "datadog": "datadoghq.com",
+  // US – Finance / Payment
+  "paypal": "paypal.com", "venmo": "venmo.com", "cashapp": "cash.app",
+  "square": "squareup.com", "chase": "chase.com", "bank of america": "bankofamerica.com",
+  "wells fargo": "wellsfargo.com", "citibank": "citibank.com", "td bank": "td.com",
+  "capital one": "capitalone.com", "american express": "americanexpress.com",
+  "amex": "americanexpress.com", "discover": "discover.com", "fidelity": "fidelity.com",
+  "vanguard": "vanguard.com", "charles schwab": "schwab.com", "robinhood": "robinhood.com",
+  "coinbase": "coinbase.com",
+  // US – Transport / Travel
+  "uber": "uber.com", "lyft": "lyft.com", "airbnb": "airbnb.com",
+  "booking": "booking.com", "expedia": "expedia.com", "hotels.com": "hotels.com",
+  "delta": "delta.com", "united": "united.com", "american airlines": "aa.com",
+  "southwest": "southwest.com", "jetblue": "jetblue.com", "spirit": "spirit.com",
+  "hilton": "hilton.com", "marriott": "marriott.com", "hyatt": "hyatt.com",
+  "enterprise": "enterprise.com", "hertz": "hertz.com", "avis": "avis.com",
+  "zipcar": "zipcar.com",
+  // US – Health / Fitness
+  "cvs pharmacy": "cvs.com", "rite aid": "riteaid.com",
+  "planet fitness": "planetfitness.com", "equinox": "equinox.com",
+  "peloton": "onepeloton.com", "calm": "calm.com", "headspace": "headspace.com",
+  "noom": "noom.com", "weight watchers": "weightwatchers.com",
+  // US – Telecom / Utilities
+  "at&t": "att.com", "att": "att.com", "verizon": "verizon.com",
+  "t-mobile": "t-mobile.com", "tmobile": "t-mobile.com", "comcast": "xfinity.com",
+  "xfinity": "xfinity.com", "spectrum": "spectrum.com",
+  // US – Gaming
+  "nintendo": "nintendo.com", "playstation": "playstation.com", "xbox": "xbox.com",
+  "steam": "steampowered.com", "epic games": "epicgames.com", "twitch": "twitch.tv",
+  "ea": "ea.com", "blizzard": "blizzard.com", "ubisoft": "ubisoft.com",
+  // Japan – EC / Retail
+  "rakuten": "rakuten.co.jp", "yahoo japan": "yahoo.co.jp", "au pay": "au.com",
+  "mercari": "mercari.com", "zozotown": "zozo.jp", "qoo10": "qoo10.jp",
+  "yodobashi": "yodobashi.com", "bic camera": "biccamera.com", "yamada": "yamada-denki.co.jp",
+  "ito-yokado": "itoyokado.com", "aeon": "aeon.co.jp", "seven eleven": "sej.co.jp",
+  "lawson": "lawson.co.jp", "familymart": "family.co.jp", "ministop": "ministop.co.jp",
+  "don quijote": "donki.com", "donki": "donki.com", "uniqlo": "uniqlo.com",
+  "nitori": "nitori.co.jp", "ikea": "ikea.com", "muji": "muji.com",
+  // Japan – Food
+  "yoshinoya": "yoshinoya.com", "matsuya": "matsuyafoods.co.jp",
+  "sukiya": "sukiya.jp", "sushiro": "akindo-sushiro.co.jp",
+  "kura sushi": "kurasushi.jp", "hama sushi": "hamasushi.co.jp",
+  "coco ichibanya": "ichibanya.co.jp", "gusto": "skylark.co.jp",
+  "joyfull": "joyfull.co.jp", "denny's japan": "dennys.co.jp",
+  "mos burger": "mos.co.jp", "freshness burger": "freshnessburger.co.jp",
+  "lotteria": "lotteria.jp", "kentucky": "kfc.co.jp", "kfc": "kfc.co.jp",
+  "dominos japan": "dominos.jp", "pizza la": "pizza-la.co.jp",
+  "uber eats": "ubereats.com",
+  // Japan – Streaming
+  "abema": "abema.tv", "u-next": "video.unext.jp", "unext": "video.unext.jp",
+  "dazn": "dazn.com", "nhk": "nhk.or.jp", "fuji tv": "fujitv.co.jp",
+  "tver": "tver.jp", "niconico": "nicovideo.jp", "dmm": "dmm.com",
+  // Japan – Telecom
+  "docomo": "docomo.ne.jp", "softbank": "softbank.jp", "au": "au.com",
+  "rakuten mobile": "network.mobile.rakuten.co.jp",
+  // Japan – Finance
+  "paypay": "paypay.ne.jp", "line pay": "linepay.line.me", "d payment": "d-card.jp",
+  "jcb": "jcb.co.jp", "smbc": "smbc.co.jp", "mufg": "bk.mufg.jp",
+  "mizuho": "mizuhobank.co.jp",
+  // Japan – Transport / Travel
+  "jr": "jr-central.co.jp", "ana": "ana.co.jp", "jal": "jal.co.jp",
+  "suica": "jreast.co.jp", "pasmo": "pasmo.co.jp",
+  "jtb": "jtb.co.jp", "jalan": "jalan.net", "ikyu": "ikyu.com",
+  // Japan – Tech
+  "line": "line.me", "cyberagent": "cyberagent.co.jp", "recruit": "recruit.co.jp",
+  "freee": "freee.co.jp", "money forward": "moneyforward.com",
+  // Global – Social / Communication
+  "youtube": "youtube.com", "twitter": "twitter.com", "x.com": "x.com",
+  "instagram": "instagram.com", "facebook": "facebook.com", "tiktok": "tiktok.com",
+  "linkedin": "linkedin.com", "pinterest": "pinterest.com", "reddit": "reddit.com",
+  "discord": "discord.com", "telegram": "telegram.org", "whatsapp": "whatsapp.com",
+  "snapchat": "snapchat.com", "skype": "skype.com", "teams": "microsoft.com",
+  // Global – Productivity / Cloud
+  "google workspace": "google.com", "google drive": "google.com",
+  "icloud": "apple.com", "onedrive": "microsoft.com",
+  "aws": "aws.amazon.com", "azure": "azure.microsoft.com", "gcp": "cloud.google.com",
+  // Global – Education
+  "coursera": "coursera.org", "udemy": "udemy.com", "skillshare": "skillshare.com",
+  "masterclass": "masterclass.com", "khan academy": "khanacademy.org",
+  "chegg": "chegg.com", "quizlet": "quizlet.com",
+  // Global – News / Media
+  "new york times": "nytimes.com", "nytimes": "nytimes.com",
+  "washington post": "washingtonpost.com", "wall street journal": "wsj.com",
+  "economist": "economist.com", "bloomberg": "bloomberg.com",
+  "nikkei": "nikkei.com", "asahi": "asahi.com",
+  // Global – Gaming / Entertainment
+  "playstore": "play.google.com", "app store": "apple.com",
+  "netflix": "netflix.com", "amazon music": "music.amazon.com",
 };
 
 function guessDomain(name: string): string | null {
   const lower = name.toLowerCase();
   for (const [key, domain] of Object.entries(MERCHANT_DOMAIN_MAP)) {
     if (lower.includes(key)) return domain;
-  }
-  return null;
-}
-
-function guessEmoji(name: string): string | null {
-  const lower = name.toLowerCase();
-  for (const [key, emoji] of Object.entries(MERCHANT_EMOJI)) {
-    if (lower.includes(key)) return emoji;
   }
   return null;
 }
@@ -81,7 +171,6 @@ function MerchantIcon({ merchant }: { merchant: string }) {
   const [imgErr, setImgErr] = useState(false);
 
   const domain = guessDomain(merchant);
-  const emoji = guessEmoji(merchant);
   const logoUrl = domain ? `https://logo.clearbit.com/${domain}` : null;
   const color = merchantColor(merchant);
   const initials = merchant.slice(0, 2).toUpperCase();
@@ -107,7 +196,7 @@ function MerchantIcon({ merchant }: { merchant: string }) {
       background: color + "20",
       border: `1.5px solid ${color}40`,
       display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: emoji ? 18 : 13, fontWeight: 800, color, flexShrink: 0,
+      fontSize: 13, fontWeight: 800, color, flexShrink: 0,
       letterSpacing: "-0.5px", position: "relative", overflow: "hidden",
     }}>
       {logoUrl && !imgErr && (
@@ -119,7 +208,7 @@ function MerchantIcon({ merchant }: { merchant: string }) {
           onError={() => setImgErr(true)}
         />
       )}
-      <span role={emoji ? "img" : undefined}>{emoji ?? initials}</span>
+      <span>{initials}</span>
     </div>
   );
 }

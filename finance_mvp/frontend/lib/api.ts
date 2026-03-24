@@ -37,7 +37,6 @@ export type SubscriptionServiceItem = {
   charge_count: number;
   last_charge_date: string;
   merchant_domain: string | null;
-  emoji: string | null;
 };
 
 export type SubscriptionsDetailResponse = {

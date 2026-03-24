@@ -56,32 +56,87 @@ def get_insights(
 # ─── サブスクリプション詳細 ────────────────────────────────────────────────────
 
 MERCHANT_DOMAIN_MAP: dict[str, str] = {
-    "netflix": "netflix.com", "spotify": "spotify.com", "hulu": "hulu.jp",
-    "disney": "disneyplus.com", "disney+": "disneyplus.com",
-    "amazon prime": "amazon.co.jp", "amazon": "amazon.co.jp",
-    "youtube": "youtube.com", "apple": "apple.com", "dazn": "dazn.com",
-    "abema": "abema.tv", "u-next": "video.unext.jp", "unext": "video.unext.jp",
-    "adobe": "adobe.com", "microsoft": "microsoft.com", "dropbox": "dropbox.com",
-    "notion": "notion.so", "slack": "slack.com", "figma": "figma.com",
-    "canva": "canva.com", "zoom": "zoom.us", "github": "github.com",
-    "openai": "openai.com", "chatgpt": "openai.com", "claude": "anthropic.com",
-    "nintendo": "nintendo.com", "playstation": "playstation.com", "xbox": "xbox.com",
-    "peloton": "onepeloton.com", "nordvpn": "nordvpn.com",
+    # US – Streaming
+    "netflix": "netflix.com", "hulu": "hulu.com", "disney": "disneyplus.com",
+    "disney+": "disneyplus.com", "hbo": "hbomax.com", "max": "max.com",
+    "peacock": "peacocktv.com", "paramount": "paramountplus.com",
+    "apple tv": "apple.com", "espn": "espnplus.com",
+    "crunchyroll": "crunchyroll.com", "funimation": "funimation.com",
+    # US – Music
+    "spotify": "spotify.com", "apple music": "apple.com", "tidal": "tidal.com",
+    "pandora": "pandora.com", "audible": "audible.com", "sirius": "siriusxm.com",
+    # US – EC / Retail
+    "amazon prime": "amazon.com", "amazon": "amazon.com",
+    "walmart": "walmart.com", "target": "target.com", "costco": "costco.com",
+    "whole foods": "wholefoodsmarket.com", "best buy": "bestbuy.com",
+    "etsy": "etsy.com", "ebay": "ebay.com", "shopify": "shopify.com",
+    # US – Tech / SaaS
+    "apple": "apple.com", "google": "google.com", "microsoft": "microsoft.com",
+    "adobe": "adobe.com", "dropbox": "dropbox.com", "notion": "notion.so",
+    "slack": "slack.com", "figma": "figma.com", "canva": "canva.com",
+    "zoom": "zoom.us", "github": "github.com", "openai": "openai.com",
+    "chatgpt": "openai.com", "claude": "anthropic.com", "anthropic": "anthropic.com",
     "grammarly": "grammarly.com", "duolingo": "duolingo.com",
-    "audible": "audible.co.jp", "kindle": "amazon.co.jp",
+    "nordvpn": "nordvpn.com", "expressvpn": "expressvpn.com",
+    "lastpass": "lastpass.com", "1password": "1password.com",
+    "evernote": "evernote.com", "trello": "trello.com", "asana": "asana.com",
+    "monday": "monday.com", "airtable": "airtable.com", "webflow": "webflow.com",
+    "squarespace": "squarespace.com", "wix": "wix.com",
+    "hubspot": "hubspot.com", "salesforce": "salesforce.com",
+    "mailchimp": "mailchimp.com", "stripe": "stripe.com",
+    "heroku": "heroku.com", "digitalocean": "digitalocean.com",
+    "cloudflare": "cloudflare.com", "datadog": "datadoghq.com",
+    # US – Health / Fitness
+    "peloton": "onepeloton.com", "calm": "calm.com", "headspace": "headspace.com",
+    "noom": "noom.com", "weight watchers": "weightwatchers.com",
+    "planet fitness": "planetfitness.com",
+    # US – News / Media
+    "new york times": "nytimes.com", "nytimes": "nytimes.com",
+    "washington post": "washingtonpost.com", "wall street journal": "wsj.com",
+    "economist": "economist.com", "bloomberg": "bloomberg.com",
+    # US – Gaming
+    "nintendo": "nintendo.com", "playstation": "playstation.com", "xbox": "xbox.com",
+    "steam": "steampowered.com", "epic games": "epicgames.com", "twitch": "twitch.tv",
+    "ea": "ea.com", "blizzard": "blizzard.com", "ubisoft": "ubisoft.com",
+    # US – Transport / Travel
+    "uber": "uber.com", "lyft": "lyft.com", "airbnb": "airbnb.com",
+    "booking": "booking.com", "expedia": "expedia.com",
+    "delta": "delta.com", "united": "united.com", "southwest": "southwest.com",
+    # US – Finance
+    "paypal": "paypal.com", "venmo": "venmo.com", "cashapp": "cash.app",
+    "robinhood": "robinhood.com", "coinbase": "coinbase.com",
+    # US – Social
+    "youtube": "youtube.com", "twitter": "twitter.com", "linkedin": "linkedin.com",
+    "discord": "discord.com", "reddit": "reddit.com", "tiktok": "tiktok.com",
+    "instagram": "instagram.com", "facebook": "facebook.com",
+    # Japan – Streaming
+    "abema": "abema.tv", "u-next": "video.unext.jp", "unext": "video.unext.jp",
+    "dazn": "dazn.com", "niconico": "nicovideo.jp", "dmm": "dmm.com",
+    "nhk": "nhk.or.jp", "tver": "tver.jp",
+    # Japan – EC / Retail
+    "rakuten": "rakuten.co.jp", "yahoo japan": "yahoo.co.jp",
+    "mercari": "mercari.com", "zozotown": "zozo.jp",
+    "yodobashi": "yodobashi.com", "bic camera": "biccamera.com",
+    "amazon.co.jp": "amazon.co.jp",
+    # Japan – Telecom
     "docomo": "docomo.ne.jp", "softbank": "softbank.jp", "au": "au.com",
-    "rakuten": "rakuten.co.jp", "icloud": "apple.com",
-}
-
-SERVICE_EMOJI: dict[str, str] = {
-    "netflix": "🎬", "spotify": "🎵", "hulu": "📺", "disney": "🏰",
-    "amazon": "📦", "youtube": "▶️", "apple": "🍎", "dazn": "⚽",
-    "adobe": "🅰️", "microsoft": "💼", "notion": "📝", "slack": "💬",
-    "figma": "🎨", "canva": "🎨", "zoom": "🎥", "github": "💻",
-    "openai": "🤖", "chatgpt": "🤖", "nintendo": "🎮", "playstation": "🕹️",
-    "xbox": "🎮", "dropbox": "📦", "peloton": "🚴", "grammarly": "✍️",
-    "duolingo": "🦜", "audible": "🎧", "kindle": "📚", "docomo": "📱",
-    "softbank": "📱", "rakuten": "🛒",
+    "rakuten mobile": "network.mobile.rakuten.co.jp",
+    # Japan – Tech / Finance
+    "line": "line.me", "freee": "freee.co.jp", "money forward": "moneyforward.com",
+    "paypay": "paypay.ne.jp",
+    # Japan – Gaming
+    "square enix": "square-enix.com", "bandai namco": "bandainamcoent.com",
+    "konami": "konami.com", "capcom": "capcom.com", "sega": "sega.com",
+    "koei tecmo": "koeitecmo.co.jp",
+    # Japan – Education
+    "benesse": "benesse.co.jp", "gakken": "gakken.co.jp",
+    # Japan – Travel
+    "ana": "ana.co.jp", "jal": "jal.co.jp", "jr": "jr-central.co.jp",
+    "jalan": "jalan.net", "ikyu": "ikyu.com",
+    # Cloud Storage
+    "icloud": "apple.com", "onedrive": "microsoft.com",
+    "google drive": "google.com", "google one": "one.google.com",
+    "kindle": "amazon.com",
 }
 
 
@@ -93,21 +148,12 @@ def guess_domain(merchant: str) -> str | None:
     return None
 
 
-def guess_emoji(merchant: str) -> str | None:
-    m = merchant.lower()
-    for key, emoji in SERVICE_EMOJI.items():
-        if key in m:
-            return emoji
-    return None
-
-
 class SubscriptionServiceItem(BaseModel):
     merchant: str
     monthly_amount: float
     charge_count: int
     last_charge_date: str
     merchant_domain: str | None
-    emoji: str | None
 
 
 class SubscriptionsDetailResponse(BaseModel):
@@ -125,9 +171,10 @@ def get_subscriptions(
     """Subscriptionカテゴリの取引を集計してサービス一覧を返す"""
     _, entity = resolve_actor_context(db, x_user_id, x_entity_id)
 
-    # Subscriptionsカテゴリのidを取得
+    # Subscriptionsカテゴリのidを取得 (entity単位でフィルタ)
     cat_row = db.execute(
         select(Category.id).where(
+            Category.entity_id == entity.id,
             func.lower(Category.name).in_(["subscriptions", "subscription", "サブスクリプション"])
         )
     ).first()
@@ -173,7 +220,6 @@ def get_subscriptions(
             charge_count=charge_count,
             last_charge_date=last_date,
             merchant_domain=guess_domain(merchant),
-            emoji=guess_emoji(merchant),
         ))
 
     # 月額降順
