@@ -26,5 +26,8 @@ class PlaidItem(Base):
     # 口座一覧（Plaidから取得したJSONをキャッシュ）
     accounts_cache: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
+    # transactions/sync API用カーソル（差分同期に使用）
+    transactions_cursor: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

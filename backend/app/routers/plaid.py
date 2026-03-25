@@ -75,7 +75,7 @@ async def create_link_token():
         from plaid.model.country_code import CountryCode
 
         request = LinkTokenCreateRequest(
-            products=[Products("transactions")],
+            products=[Products("transactions"), Products("balance")],
             client_name="Wallet Finance",
             country_codes=[CountryCode("US")],
             language="en",
@@ -216,8 +216,10 @@ async def get_plaid_accounts(db: AsyncSession = Depends(get_db)):
 @router.post("/sync/{item_id}")
 async def sync_plaid_item(item_id: str, db: AsyncSession = Depends(get_db)):
     """
-    Plaidから最新の取引を取得してDBに保存する。
-    直近90日分を同期（初回）、以降は差分同期。
+    Plaid transactions/sync API で取引を差分同期する。
+    - 初回: 利用可能な全履歴（最大24ヶ月）を取得
+    - 以降: カーソルベースの差分同期（追加・変更・削除を正確に反映）
+    - クレカ・銀行口座どちらも plaid_account_id で紐付け
     """
     plaid_item = (
         await db.execute(select(PlaidItem).where(PlaidItem.item_id == item_id))
@@ -229,29 +231,12 @@ async def sync_plaid_item(item_id: str, db: AsyncSession = Depends(get_db)):
     client = _get_plaid_client()
 
     try:
-        from plaid.model.transactions_get_request import TransactionsGetRequest
-        from plaid.model.transactions_get_request_options import TransactionsGetRequestOptions
+        from plaid.model.transactions_sync_request import TransactionsSyncRequest
 
-        # 同期範囲: 前回同期日 or 90日前
-        if plaid_item.last_synced_at:
-            start = plaid_item.last_synced_at.date() - timedelta(days=1)
-        else:
-            start = date.today() - timedelta(days=90)
-        end = date.today()
-
-        options = TransactionsGetRequestOptions(count=500, offset=0)
-        response = client.transactions_get(
-            TransactionsGetRequest(
-                access_token=plaid_item.access_token,
-                start_date=start,
-                end_date=end,
-                options=options,
-            )
-        )
-
-        transactions = response["transactions"]
-        added = 0
-        skipped = 0
+        added_count = 0
+        modified_count = 0
+        removed_count = 0
+        cursor = plaid_item.transactions_cursor  # Noneなら初回フル取得
 
         # インポートレコードを作成
         import_record = ImportRecord(
@@ -265,64 +250,121 @@ async def sync_plaid_item(item_id: str, db: AsyncSession = Depends(get_db)):
         db.add(import_record)
         await db.flush()
 
-        for tx in transactions:
-            # ペンディング取引はスキップ
-            if tx.get("pending", False):
-                continue
+        # ページネーションループ（has_more=Trueの間繰り返す）
+        has_more = True
+        while has_more:
+            request_kwargs = {"access_token": plaid_item.access_token}
+            if cursor:
+                request_kwargs["cursor"] = cursor
 
-            tx_date = tx["date"]
-            if isinstance(tx_date, str):
-                tx_date = datetime.strptime(tx_date, "%Y-%m-%d").date()
+            response = client.transactions_sync(
+                TransactionsSyncRequest(**request_kwargs)
+            )
 
-            amount_raw = tx["amount"]
-            # Plaidでは正値=支出、負値=収入
-            direction = TransactionDirection.DEBIT if amount_raw > 0 else TransactionDirection.CREDIT
-            amount = Decimal(str(abs(amount_raw)))
+            # 追加された取引
+            for tx in response["added"]:
+                if tx.get("pending", False):
+                    continue
 
-            merchant_name = tx.get("merchant_name") or tx.get("name") or "Unknown"
+                tx_date = tx["date"]
+                if isinstance(tx_date, str):
+                    tx_date = datetime.strptime(tx_date, "%Y-%m-%d").date()
 
-            # 重複チェック（Plaidのtransaction_idで）
-            plaid_tx_id = tx["transaction_id"]
-            existing_tx = (
-                await db.execute(
-                    select(Transaction).where(
-                        Transaction.user_id == CURRENT_USER_ID,
-                        Transaction.dedup_hash == f"plaid_{plaid_tx_id}",
+                amount_raw = tx["amount"]
+                direction = TransactionDirection.DEBIT if amount_raw > 0 else TransactionDirection.CREDIT
+                amount = Decimal(str(abs(amount_raw)))
+                merchant_name = tx.get("merchant_name") or tx.get("name") or "Unknown"
+                plaid_tx_id = tx["transaction_id"]
+                plaid_account_id = tx.get("account_id")
+
+                existing_tx = (
+                    await db.execute(
+                        select(Transaction).where(
+                            Transaction.user_id == CURRENT_USER_ID,
+                            Transaction.dedup_hash == f"plaid_{plaid_tx_id}",
+                        )
                     )
+                ).scalar_one_or_none()
+
+                if existing_tx:
+                    continue
+
+                category = _categorizer.classify(
+                    merchant_raw=merchant_name,
+                    direction=direction.value,
                 )
-            ).scalar_one_or_none()
 
-            if existing_tx:
-                skipped += 1
-                continue
+                db.add(Transaction(
+                    user_id=CURRENT_USER_ID,
+                    import_record_id=import_record.id,
+                    transaction_date=tx_date,
+                    merchant_raw=merchant_name,
+                    merchant_normalized=merchant_name,
+                    amount=amount,
+                    direction=direction,
+                    category=category,
+                    source_type="csv_statement",
+                    dedup_hash=f"plaid_{plaid_tx_id}",
+                    plaid_account_id=plaid_account_id,
+                ))
+                added_count += 1
 
-            category = _categorizer.classify(
-                merchant_raw=merchant_name,
-                direction=direction.value,
-            )
+            # 変更された取引（ペンディング→確定など）
+            for tx in response["modified"]:
+                if tx.get("pending", False):
+                    continue
 
-            new_tx = Transaction(
-                user_id=CURRENT_USER_ID,
-                import_record_id=import_record.id,
-                transaction_date=tx_date,
-                merchant_raw=merchant_name,
-                merchant_normalized=merchant_name,
-                amount=amount,
-                direction=direction,
-                category=category,
-                source_type="csv_statement",
-                dedup_hash=f"plaid_{plaid_tx_id}",
-            )
-            db.add(new_tx)
-            added += 1
+                plaid_tx_id = tx["transaction_id"]
+                existing_tx = (
+                    await db.execute(
+                        select(Transaction).where(
+                            Transaction.user_id == CURRENT_USER_ID,
+                            Transaction.dedup_hash == f"plaid_{plaid_tx_id}",
+                        )
+                    )
+                ).scalar_one_or_none()
+
+                if existing_tx:
+                    tx_date = tx["date"]
+                    if isinstance(tx_date, str):
+                        tx_date = datetime.strptime(tx_date, "%Y-%m-%d").date()
+                    amount_raw = tx["amount"]
+                    existing_tx.transaction_date = tx_date
+                    existing_tx.amount = Decimal(str(abs(amount_raw)))
+                    existing_tx.direction = TransactionDirection.DEBIT if amount_raw > 0 else TransactionDirection.CREDIT
+                    existing_tx.merchant_raw = tx.get("merchant_name") or tx.get("name") or existing_tx.merchant_raw
+                    existing_tx.plaid_account_id = tx.get("account_id") or existing_tx.plaid_account_id
+                    modified_count += 1
+
+            # 削除された取引（返金・エラー修正など）
+            for tx in response["removed"]:
+                plaid_tx_id = tx["transaction_id"]
+                existing_tx = (
+                    await db.execute(
+                        select(Transaction).where(
+                            Transaction.user_id == CURRENT_USER_ID,
+                            Transaction.dedup_hash == f"plaid_{plaid_tx_id}",
+                        )
+                    )
+                ).scalar_one_or_none()
+                if existing_tx:
+                    await db.delete(existing_tx)
+                    removed_count += 1
+
+            cursor = response["next_cursor"]
+            has_more = response["has_more"]
+
+        # カーソルと同期時刻を更新
+        plaid_item.transactions_cursor = cursor
+        plaid_item.last_synced_at = datetime.utcnow()
 
         import_record.status = ImportStatus.COMPLETED
-        import_record.success_rows = added
-        import_record.skipped_rows = skipped
-        import_record.total_rows = added + skipped
+        import_record.success_rows = added_count
+        import_record.skipped_rows = 0
+        import_record.total_rows = added_count + modified_count
         import_record.completed_at = datetime.utcnow()
 
-        # 口座情報を更新
+        # 口座残高を更新（銀行・クレカ両方）
         from plaid.model.accounts_get_request import AccountsGetRequest
         acct_resp = client.accounts_get(AccountsGetRequest(access_token=plaid_item.access_token))
         plaid_item.accounts_cache = [
@@ -337,14 +379,14 @@ async def sync_plaid_item(item_id: str, db: AsyncSession = Depends(get_db)):
                 "currency": a["balances"].get("iso_currency_code", "USD"),
                 "current_balance": a["balances"].get("current"),
                 "available_balance": a["balances"].get("available"),
+                "credit_limit": a["balances"].get("limit"),  # クレカの利用上限額
                 "last_synced_at": datetime.utcnow().isoformat(),
             }
             for a in acct_resp["accounts"]
         ]
-        plaid_item.last_synced_at = datetime.utcnow()
 
         await db.commit()
-        return {"added": added, "modified": 0, "removed": skipped}
+        return {"added": added_count, "modified": modified_count, "removed": removed_count}
 
     except HTTPException:
         raise

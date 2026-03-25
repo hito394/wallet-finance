@@ -57,6 +57,9 @@ class Transaction(Base):
     notes: Mapped[str] = mapped_column(Text, nullable=True)
     is_ignored: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Plaid連携情報
+    plaid_account_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)  # どの口座の取引か
+
     # 重複検出用ハッシュ（date + amount + normalized_merchant でハッシュ）
     dedup_hash: Mapped[str] = mapped_column(String(64), nullable=True, index=True)
 
