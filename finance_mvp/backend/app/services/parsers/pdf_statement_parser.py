@@ -400,24 +400,23 @@ def _extract_lines_from_page(page) -> list[str]:
             lines.append(line)
 
     # ── Continuation-line merging ────────────────────────────────────────────
-    # Some bank statements put the transaction description on line N and the
-    # amount on line N+1 (no date prefix on N+1).  If line N starts with a date
-    # but has no amount token, AND line N+1 has no date prefix, merge them.
+    # Some bank statements spread a single transaction across multiple lines:
+    # the date+description may appear on line N with no amount, and the amount
+    # (and optional balance) on line N+k.  Absorb every consecutive non-date
+    # line into the current dated row until an amount token is found or the
+    # next dated row begins.
     merged: list[str] = []
     i = 0
     while i < len(lines):
         current = lines[i]
-        # Does this line start with a date?
         if DATE_PREFIX_PATTERN.match(current):
-            # Does it already contain an amount token?
-            has_amount = bool(AMOUNT_TOKEN_PATTERN.search(current))
-            if not has_amount and i + 1 < len(lines):
-                next_line = lines[i + 1]
-                # Only merge if the next line does NOT start with a date
-                if not DATE_PREFIX_PATTERN.match(next_line):
-                    merged.append(current + " " + next_line)
-                    i += 2
-                    continue
+            # Keep absorbing non-date lines until we have an amount token
+            while not AMOUNT_TOKEN_PATTERN.search(current) and i + 1 < len(lines):
+                nxt = lines[i + 1]
+                if DATE_PREFIX_PATTERN.match(nxt):
+                    break  # Next transaction row starts – stop merging
+                current = current + " " + nxt
+                i += 1
         merged.append(current)
         i += 1
 
@@ -590,4 +589,3 @@ def parse_statement_text_with_diagnostics(
 def parse_pdf_statement(file_path: str, source: str) -> list[ParsedTransaction]:
     parsed, _ = parse_pdf_statement_with_diagnostics(file_path, source)
     return parsed
-
