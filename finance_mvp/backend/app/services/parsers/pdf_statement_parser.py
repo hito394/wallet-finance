@@ -71,6 +71,8 @@ SUMMARY_LINE_KEYWORDS = {
 
 ACCOUNT_NUMBER_PATTERN = re.compile(r"\b(?:acct|account)\b.*\b\d{4,}\b", re.IGNORECASE)
 ACCOUNT_LIKE_FRAGMENT_PATTERN = re.compile(r"^[#*xX\-\s\d]{6,}$")
+
+# Hints that always indicate income regardless of source
 _CREDIT_HINTS = (
     "salary",
     "payroll",
@@ -84,19 +86,36 @@ _CREDIT_HINTS = (
     "入金",
     "給与",
 )
+
+# Hints that indicate a credit card payment (reduces card balance = credit).
+# "payment" on a card statement means the cardholder paid off their balance,
+# which is the opposite of a bank statement where "payment" is an outgoing charge.
+_CARD_CREDIT_HINTS = (
+    "payment",
+    "online payment",
+    "autopay",
+    "credit adj",
+    "返金",
+)
+
+# Hints that always indicate an expense/outgoing transaction
 _DEBIT_HINTS = (
     "withdraw",
     "debit",
     "purchase",
     "charge",
     "fee",
-    "payment",
     "transfer out",
     "ach debit",
     "atm",
     "zelle debit",
     "引落",
     "出金",
+)
+
+# Hints that indicate outgoing on a bank statement (not applicable to cards)
+_BANK_DEBIT_HINTS = (
+    "payment",
 )
 
 
@@ -323,13 +342,21 @@ def _parse_transaction_line(
     lower_desc = description.lower()
     # Determine transaction direction:
     # 1) Section context is strongest when available.
-    # 2) Description hints override ambiguous numeric sign conventions.
-    # 3) Bank default is debit (spend) for unsigned rows; card follows raw sign/CR.
+    # 2) Universal credit hints (salary, deposit, refund, …).
+    # 3) Source-specific hints: card payments credit the card balance;
+    #    the same keyword on a bank statement is an outgoing debit.
+    # 4) Universal debit hints.
+    # 5) Source fallback: bank defaults to debit for unsigned rows;
+    #    card follows the raw sign/CR convention from the amount token.
     if section_direction is not None:
         direction = section_direction
     elif any(hint in lower_desc for hint in _CREDIT_HINTS):
         direction = "credit"
+    elif source == "card" and any(hint in lower_desc for hint in _CARD_CREDIT_HINTS):
+        direction = "credit"
     elif any(hint in lower_desc for hint in _DEBIT_HINTS):
+        direction = "debit"
+    elif source == "bank" and any(hint in lower_desc for hint in _BANK_DEBIT_HINTS):
         direction = "debit"
     elif source == "bank":
         if is_negative:
