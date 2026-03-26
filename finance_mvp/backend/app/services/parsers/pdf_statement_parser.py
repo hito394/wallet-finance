@@ -71,6 +71,8 @@ SUMMARY_LINE_KEYWORDS = {
 
 ACCOUNT_NUMBER_PATTERN = re.compile(r"\b(?:acct|account)\b.*\b\d{4,}\b", re.IGNORECASE)
 ACCOUNT_LIKE_FRAGMENT_PATTERN = re.compile(r"^[#*xX\-\s\d]{6,}$")
+
+# Hints that always indicate income regardless of source
 _CREDIT_HINTS = (
     "salary",
     "payroll",
@@ -84,19 +86,36 @@ _CREDIT_HINTS = (
     "入金",
     "給与",
 )
+
+# Hints that indicate a credit card payment (reduces card balance = credit).
+# "payment" on a card statement means the cardholder paid off their balance,
+# which is the opposite of a bank statement where "payment" is an outgoing charge.
+_CARD_CREDIT_HINTS = (
+    "payment",
+    "online payment",
+    "autopay",
+    "credit adj",
+    "返金",
+)
+
+# Hints that always indicate an expense/outgoing transaction
 _DEBIT_HINTS = (
     "withdraw",
     "debit",
     "purchase",
     "charge",
     "fee",
-    "payment",
     "transfer out",
     "ach debit",
     "atm",
     "zelle debit",
     "引落",
     "出金",
+)
+
+# Hints that indicate outgoing on a bank statement (not applicable to cards)
+_BANK_DEBIT_HINTS = (
+    "payment",
 )
 
 
@@ -323,13 +342,21 @@ def _parse_transaction_line(
     lower_desc = description.lower()
     # Determine transaction direction:
     # 1) Section context is strongest when available.
-    # 2) Description hints override ambiguous numeric sign conventions.
-    # 3) Bank default is debit (spend) for unsigned rows; card follows raw sign/CR.
+    # 2) Universal credit hints (salary, deposit, refund, …).
+    # 3) Source-specific hints: card payments credit the card balance;
+    #    the same keyword on a bank statement is an outgoing debit.
+    # 4) Universal debit hints.
+    # 5) Source fallback: bank defaults to debit for unsigned rows;
+    #    card follows the raw sign/CR convention from the amount token.
     if section_direction is not None:
         direction = section_direction
     elif any(hint in lower_desc for hint in _CREDIT_HINTS):
         direction = "credit"
+    elif source == "card" and any(hint in lower_desc for hint in _CARD_CREDIT_HINTS):
+        direction = "credit"
     elif any(hint in lower_desc for hint in _DEBIT_HINTS):
+        direction = "debit"
+    elif source == "bank" and any(hint in lower_desc for hint in _BANK_DEBIT_HINTS):
         direction = "debit"
     elif source == "bank":
         if is_negative:
@@ -400,24 +427,23 @@ def _extract_lines_from_page(page) -> list[str]:
             lines.append(line)
 
     # ── Continuation-line merging ────────────────────────────────────────────
-    # Some bank statements put the transaction description on line N and the
-    # amount on line N+1 (no date prefix on N+1).  If line N starts with a date
-    # but has no amount token, AND line N+1 has no date prefix, merge them.
+    # Some bank statements spread a single transaction across multiple lines:
+    # the date+description may appear on line N with no amount, and the amount
+    # (and optional balance) on line N+k.  Absorb every consecutive non-date
+    # line into the current dated row until an amount token is found or the
+    # next dated row begins.
     merged: list[str] = []
     i = 0
     while i < len(lines):
         current = lines[i]
-        # Does this line start with a date?
         if DATE_PREFIX_PATTERN.match(current):
-            # Does it already contain an amount token?
-            has_amount = bool(AMOUNT_TOKEN_PATTERN.search(current))
-            if not has_amount and i + 1 < len(lines):
-                next_line = lines[i + 1]
-                # Only merge if the next line does NOT start with a date
-                if not DATE_PREFIX_PATTERN.match(next_line):
-                    merged.append(current + " " + next_line)
-                    i += 2
-                    continue
+            # Keep absorbing non-date lines until we have an amount token
+            while not AMOUNT_TOKEN_PATTERN.search(current) and i + 1 < len(lines):
+                nxt = lines[i + 1]
+                if DATE_PREFIX_PATTERN.match(nxt):
+                    break  # Next transaction row starts – stop merging
+                current = current + " " + nxt
+                i += 1
         merged.append(current)
         i += 1
 
@@ -590,4 +616,3 @@ def parse_statement_text_with_diagnostics(
 def parse_pdf_statement(file_path: str, source: str) -> list[ParsedTransaction]:
     parsed, _ = parse_pdf_statement_with_diagnostics(file_path, source)
     return parsed
-
