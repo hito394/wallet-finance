@@ -19,7 +19,7 @@ aiofiles==23.2.1
 # === PDF Parsing ===
 pdfplumber==0.10.3
 pdf2image==1.17.0
-PyMuPDF==1.23.26
+PyMuPDF==1.24.3
 
 # === OCR ===
 pytesseract==0.3.10
