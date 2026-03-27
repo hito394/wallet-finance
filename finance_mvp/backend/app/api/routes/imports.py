@@ -13,6 +13,7 @@ from app.models.document import FinancialDocument
 from app.models.import_job import ImportJob, ImportSourceType, ImportStatus
 from app.schemas.import_job import ImportJobRead
 from app.services.ingestion.pipeline import process_import
+from app.services.storage.object_store import upload_file
 from app.utils.user_context import resolve_actor_context
 
 router = APIRouter()
@@ -203,8 +204,19 @@ def upload_import(
     settings.file_storage_root.mkdir(parents=True, exist_ok=True)
 
     safe_name = Path(file.filename or "upload.bin").name
-    destination = settings.file_storage_root / f"{uuid4()}_{safe_name}"
+    file_id = str(uuid4())
+    destination = settings.file_storage_root / f"{file_id}_{safe_name}"
     file_hash = _persist_upload_and_hash(file, destination)
+
+    # Upload to object storage when configured; keep local path as fallback
+    final_uri: str = str(destination)
+    if settings.object_storage_enabled:
+        try:
+            s3_key = f"uploads/{file_id}_{safe_name}"
+            final_uri = upload_file(destination, s3_key)
+            destination.unlink(missing_ok=True)  # free local disk after upload
+        except Exception:
+            pass  # leave final_uri as local path; storage upload non-fatal
 
     parsed_source_type: ImportSourceType | None = None
     if source_type and source_type.lower() != "auto":
@@ -220,7 +232,14 @@ def upload_import(
     if parsed_source_type is not None:
         resolved_source_type = parsed_source_type
     else:
-        resolved_source_type = _infer_source_type_from_content(destination, safe_name) or _infer_source_type(safe_name)
+        # Content-based inference needs a local path; if already uploaded, re-download is skipped
+        # by using the local destination path while it still exists (before potential cleanup).
+        local_for_inference = destination if destination.exists() else Path(final_uri) if not final_uri.startswith("s3://") else destination
+        resolved_source_type = (
+            _infer_source_type_from_content(local_for_inference, safe_name)
+            if local_for_inference.exists()
+            else None
+        ) or _infer_source_type(safe_name)
 
     job = ImportJob(
         user_id=user.id,
@@ -229,7 +248,7 @@ def upload_import(
         status=ImportStatus.pending,
         file_name=safe_name,
         file_hash=file_hash,
-        storage_uri=str(destination),
+        storage_uri=final_uri,
         metadata_json={},
     )
     db.add(job)
