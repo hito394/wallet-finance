@@ -7,8 +7,8 @@ type Props = {
   overview: MonthlyOverview | null;
 };
 
-function fmtJpy(v: number) {
-  return `¥${Math.abs(v).toLocaleString()}`;
+function fmtUsd(v: number) {
+  return `$${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default function CashFlowCard({ overview }: Props) {
@@ -19,9 +19,9 @@ export default function CashFlowCard({ overview }: Props) {
   const barPct  = income > 0 ? Math.min(100, Math.round((spend / income) * 100)) : 0;
 
   const cols: { label: string; value: string; sub?: string; color: string }[] = [
-    { label: "収入", value: fmtJpy(income), color: "#22c55e" },
-    { label: "支出", value: fmtJpy(spend),  color: "#f87171" },
-    { label: "純額", value: (net >= 0 ? "+" : "-") + fmtJpy(net), color: net >= 0 ? "#3b82f6" : "#f87171" },
+    { label: "収入", value: fmtUsd(income), color: "#22c55e" },
+    { label: "支出", value: fmtUsd(spend),  color: "#f87171" },
+    { label: "純額", value: (net >= 0 ? "+" : "-") + fmtUsd(net), color: net >= 0 ? "#3b82f6" : "#f87171" },
     { label: "貯蓄率", value: `${savings}%`, sub: net >= 0 ? "Good" : "Overspent", color: savings >= 20 ? "#22c55e" : savings >= 0 ? "#f59e0b" : "#f87171" },
   ];
 
