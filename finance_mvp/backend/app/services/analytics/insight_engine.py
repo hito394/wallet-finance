@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import extract, func, select
@@ -102,6 +102,7 @@ def generate_insights(overview: MonthlyOverview) -> list[InsightItem]:
 
 def monthly_history(db: Session, entity_id, months: int) -> list[MonthlyHistoryItem]:
     """Return aggregated spend/income for the last `months` calendar months."""
+    today = date.today()
     rows = db.execute(
         select(
             extract("year", Transaction.transaction_date).label("yr"),
@@ -114,6 +115,7 @@ def monthly_history(db: Session, entity_id, months: int) -> list[MonthlyHistoryI
         .where(
             Transaction.entity_id == entity_id,
             Transaction.is_ignored.is_(False),
+            Transaction.transaction_date <= today,
         )
         .group_by("yr", "mo", Category.name, Transaction.direction)
         .order_by("yr", "mo")
