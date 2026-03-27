@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.category import Category
+from app.models.plaid_item import BankAccount
 from app.models.transaction import Transaction, TransactionDirection
 from app.schemas.analytics import InsightItem, MonthlyHistoryItem, MonthlyOverview
 from app.services.analytics.insight_engine import generate_insights, monthly_history, monthly_overview
@@ -227,4 +228,81 @@ def get_subscriptions(
     total = sum(i.monthly_amount for i in items)
 
     return SubscriptionsDetailResponse(subscriptions=items, total_monthly=round(total, 2))
+
+
+# ─── Net Worth ────────────────────────────────────────────────────────────────
+
+class NetWorthAccount(BaseModel):
+    id: str
+    name: str
+    mask: str | None
+    account_type: str | None
+    account_subtype: str | None
+    current_balance: float
+    institution_name: str | None
+
+
+class NetWorthResponse(BaseModel):
+    total_assets: float      # depository + investment balances
+    total_liabilities: float  # credit card / loan balances (positive number)
+    net_worth: float
+    accounts: list[NetWorthAccount]
+
+
+@router.get("/net-worth", response_model=NetWorthResponse)
+def get_net_worth(
+    x_user_id: str | None = Header(default=None),
+    x_entity_id: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> NetWorthResponse:
+    """Return net worth based on connected Plaid bank account balances."""
+    from app.models.plaid_item import PlaidItem
+
+    _, entity = resolve_actor_context(db, x_user_id, x_entity_id)
+
+    rows = db.execute(
+        select(
+            BankAccount.id,
+            BankAccount.name,
+            BankAccount.mask,
+            BankAccount.account_type,
+            BankAccount.account_subtype,
+            BankAccount.current_balance,
+            PlaidItem.institution_name,
+        )
+        .join(PlaidItem, PlaidItem.id == BankAccount.plaid_item_id)
+        .where(
+            BankAccount.entity_id == entity.id,
+            BankAccount.is_active.is_(True),
+        )
+        .order_by(BankAccount.account_type, BankAccount.name)
+    ).all()
+
+    assets = 0.0
+    liabilities = 0.0
+    accounts: list[NetWorthAccount] = []
+
+    for row in rows:
+        bal = float(row.current_balance or 0)
+        acct_type = (row.account_type or "").lower()
+        accounts.append(NetWorthAccount(
+            id=str(row.id),
+            name=row.name,
+            mask=row.mask,
+            account_type=row.account_type,
+            account_subtype=row.account_subtype,
+            current_balance=bal,
+            institution_name=row.institution_name,
+        ))
+        if acct_type in {"credit", "loan"}:
+            liabilities += bal
+        else:
+            assets += bal
+
+    return NetWorthResponse(
+        total_assets=round(assets, 2),
+        total_liabilities=round(liabilities, 2),
+        net_worth=round(assets - liabilities, 2),
+        accounts=accounts,
+    )
 
