@@ -22,7 +22,7 @@ from app.services.dedupe.duplicate_detector import (
 from app.services.document_intelligence.pipeline import analyze_financial_document
 from app.services.matching.receipt_transaction_matcher import match_receipt_to_transactions
 from app.services.matching.document_cross_validator import cross_validate_document_with_transactions
-from app.services.normalization.merchant_normalizer import normalize_merchant
+from app.services.normalization.merchant_normalizer import normalize_merchant, strip_statement_noise
 from app.services.parsers.csv_statement_parser import parse_csv_statement
 from app.services.parsers.ofx_parser import parse_ofx_statement
 from app.services.parsers.pdf_statement_parser import (
@@ -82,7 +82,6 @@ def process_import(
     db.flush()
 
     # ── Phase 1: document intelligence ────────────────────────────────────────
-    # If anything here fails we roll back everything and mark the job failed.
     try:
         file_path = Path(local_file_path)
         suffix = file_path.suffix.lower()
@@ -100,9 +99,6 @@ def process_import(
         elif suffix in {".csv", ".ofx", ".qfx"}:
             document_text = f"statement file {job.file_name}"
 
-        # Reparse may happen after a restart where the original uploaded file is
-        # no longer available on ephemeral disk. Keep prior extracted text so
-        # statement parsing still has data to work with.
         if not document_text and preserved_raw_text:
             document_text = preserved_raw_text
 
@@ -236,8 +232,6 @@ def process_import(
         return
 
     # ── Phase 2: transaction / receipt extraction ─────────────────────────────
-    # The FinancialDocument is already flushed.  If parsing fails we still
-    # commit the document so it appears in the UI; only the job is marked failed.
     try:
         if job.source_type in {ImportSourceType.bank_statement, ImportSourceType.credit_card_statement}:
             parser_confidence = 0.9
@@ -254,8 +248,6 @@ def process_import(
                     local_file_path,
                     source=source,
                 )
-                # Fallback: some statement PDFs have a text layer that is valid,
-                # but table word coordinates are too noisy for layout extraction.
                 if not parsed_transactions and (document.raw_text or "").strip():
                     fallback_transactions, fallback_diagnostics = parse_statement_text_with_diagnostics(
                         document.raw_text,
@@ -280,8 +272,6 @@ def process_import(
                 parsed_transactions = []
                 parser_confidence = 0.0
 
-            # Delete old transactions only after parsing succeeds, so a parse
-            # failure never leaves the import with zero transactions.
             if force_reprocess:
                 db.execute(
                     delete(Transaction).where(
@@ -296,9 +286,12 @@ def process_import(
             extracted_amount_total = Decimal("0")
             for item in parsed_transactions:
                 merchant_normalized = normalize_merchant(item.merchant_raw)
+                # Clean description: strip leading numeric reference codes so
+                # the description field contains human-readable text only.
+                clean_desc = strip_statement_noise(item.description or item.merchant_raw or "")
                 category_result = categorize_transaction(
                     merchant_normalized,
-                    item.description,
+                    clean_desc,
                     direction=item.direction,
                     source=item.source,
                 )
@@ -357,7 +350,7 @@ def process_import(
                     posted_date=item.posted_date,
                     merchant_raw=item.merchant_raw,
                     merchant_normalized=merchant_normalized,
-                    description=item.description,
+                    description=clean_desc,
                     amount=item.amount,
                     running_balance=item.running_balance,
                     direction=item.direction,
@@ -377,7 +370,6 @@ def process_import(
             else:
                 extracted_amount_total = sum((item.amount or Decimal("0") for item in parsed_transactions), Decimal("0"))
 
-            # Statements generate rows and may include partial extraction confidence.
             document.match_confidence = parser_confidence
             document.match_reason = (
                 f"statement_rows={parsed_row_count} created={created_count} duplicates={duplicate_count}"
@@ -387,7 +379,6 @@ def process_import(
             document.matched_by_date = parsed_row_count > 0
             document.extraction_confidence = max(document.extraction_confidence, parser_confidence)
 
-            # Persist extraction outcome
             document.extracted_transaction_count = parsed_row_count
             document.transactions_created_count = created_count
             document.extracted_total_amount = extracted_amount_total if parsed_row_count > 0 else None
@@ -400,8 +391,6 @@ def process_import(
                         "Transactions extracted but parser confidence is low"
                     )
                 else:
-                    # Duplicate rows being skipped is expected deduplication behavior,
-                    # not a parsing error — mark the document as fully parsed.
                     document.parsing_status = "parsed"
                     document.parsing_failure_reason = None
             elif parsed_row_count > 0 and created_count == 0 and (same_import_existing_count > 0 or duplicate_count > 0):
@@ -459,7 +448,6 @@ def process_import(
                 tax_amount=parsed_receipt.tax_amount,
                 line_items=parsed_receipt.line_items,
                 raw_text=parsed_receipt.raw_text,
-                ocr_confidence=parsed_receipt.confidence,
             )
             db.add(receipt)
             db.flush()
@@ -472,7 +460,6 @@ def process_import(
             document.matched_by_merchant = validation["matched_by_merchant"]
             document.matched_by_date = validation["matched_by_date"]
 
-            # Receipts: no transaction rows to count, but OCR extraction succeeded
             document.extracted_transaction_count = 0
             document.transactions_created_count = 0
             document.extracted_total_amount = None
@@ -507,13 +494,9 @@ def process_import(
             )
             document.review_required = True
             document.review_reason = reason_text
-            # Keep partial status when available; parsed documents with a review issue
-            # are downgraded to needs_review.
             if document.parsing_status == "parsed":
                 document.parsing_status = "needs_review"
 
-        # After importing bank/card statements, retroactively mark cross-source
-        # payment credits as ignored to prevent bank debit + CC payment double-count.
         if job.source_type in {ImportSourceType.bank_statement, ImportSourceType.credit_card_statement}:
             scan_cross_source_payments(db, job.entity_id)
 
@@ -521,7 +504,6 @@ def process_import(
         job.processed_at = datetime.utcnow()
         db.commit()
     except Exception as exc:  # noqa: BLE001
-        # Keep the document; only the extraction phase failed.
         document.parsing_status = "failed"
         document.parsing_failure_reason = str(exc)[:400]
         job.status = ImportStatus.failed
