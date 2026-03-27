@@ -6,6 +6,7 @@ import SpendingPieChart from "@/components/charts/SpendingPieChart";
 import CashFlowCard from "@/components/dashboard/CashFlowCard";
 import RecentTransactionsList from "@/components/dashboard/RecentTransactionsList";
 import SubscriptionsWidget from "@/components/SubscriptionsWidget";
+import NetWorthWidget from "@/components/NetWorthWidget";
 import { asNumber } from "@/lib/api";
 import type { MonthlyOverview, MonthlyHistoryItem, TransactionItem } from "@/lib/api";
 
@@ -178,13 +179,16 @@ export default function HomeWidgets({ overview, transactions, history, selectedM
         <SpendingPieChart data={(overview?.category_breakdown ?? []).filter(c => !["income", "transfer", "Income", "Transfer", "Transfers"].includes(c.category))} />
       </div>
 
-      {/* ── Row 3: トレンドチャート + サブスク ── */}
+      {/* ── Row 3: トレンドチャート + ネットワース ── */}
       <div style={{ display: "grid", gap: 20, gridTemplateColumns: "3fr 2fr" }}>
         <MonthlyTrendChart data={history} selectedMonth={selectedMonth} />
-        <SubscriptionsWidget entityId={entityId} />
+        <NetWorthWidget entityId={entityId} />
       </div>
 
-      {/* ── Row 4: 直近の取引 (全幅) ── */}
+      {/* ── Row 4: サブスク (全幅) ── */}
+      <SubscriptionsWidget entityId={entityId} />
+
+      {/* ── Row 5: 直近の取引 (全幅) ── */}
       <RecentTransactionsList rows={transactions} entityId={entityId} />
 
     </div>

@@ -256,6 +256,27 @@ export async function fetchMonthlyHistory(entityId?: string, months = 6): Promis
   return requestJson<MonthlyHistoryItem[]>(`/analytics/monthly-history?months=${months}`, undefined, { entityId });
 }
 
+export type NetWorthAccount = {
+  id: string;
+  name: string;
+  mask: string | null;
+  account_type: string | null;
+  account_subtype: string | null;
+  current_balance: number;
+  institution_name: string | null;
+};
+
+export type NetWorthData = {
+  total_assets: number;
+  total_liabilities: number;
+  net_worth: number;
+  accounts: NetWorthAccount[];
+};
+
+export async function fetchNetWorth(entityId?: string): Promise<ApiResult<NetWorthData>> {
+  return requestJson<NetWorthData>("/analytics/net-worth", undefined, { entityId });
+}
+
 export async function fetchTransactions(entityId?: string, year?: number, month?: number): Promise<ApiResult<TransactionItem[]>> {
   const params = new URLSearchParams();
   if (year) params.set("year", String(year));
