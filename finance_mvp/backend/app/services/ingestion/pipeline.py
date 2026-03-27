@@ -23,6 +23,7 @@ from app.services.document_intelligence.pipeline import analyze_financial_docume
 from app.services.matching.receipt_transaction_matcher import match_receipt_to_transactions
 from app.services.matching.document_cross_validator import cross_validate_document_with_transactions
 from app.services.normalization.merchant_normalizer import normalize_merchant, strip_statement_noise
+from app.services.storage.object_store import resolve_to_local_path
 from app.services.parsers.csv_statement_parser import parse_csv_statement
 from app.services.parsers.ofx_parser import parse_ofx_statement
 from app.services.parsers.pdf_statement_parser import (
@@ -81,6 +82,22 @@ def process_import(
     job.error_message = None
     db.flush()
 
+    with resolve_to_local_path(local_file_path) as resolved_path:
+        _process_import_inner(
+            db, job, str(resolved_path),
+            force_reprocess=force_reprocess,
+            skip_dedup=skip_dedup,
+        )
+
+
+def _process_import_inner(
+    db: Session,
+    job: ImportJob,
+    local_file_path: str,
+    *,
+    force_reprocess: bool = False,
+    skip_dedup: bool = False,
+) -> None:
     # ── Phase 1: document intelligence ────────────────────────────────────────
     try:
         file_path = Path(local_file_path)

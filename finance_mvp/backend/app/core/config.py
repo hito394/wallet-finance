@@ -26,6 +26,18 @@ class Settings(BaseSettings):
     plaid_secret: str     = Field(default="", alias="PLAID_SECRET")
     plaid_env: str        = Field(default="sandbox", alias="PLAID_ENV")  # sandbox | development | production
 
+    # Object storage – Cloudflare R2 / AWS S3 (optional)
+    # When set, uploaded files are stored in the bucket; local disk is only used as a temp buffer.
+    s3_bucket: str            = Field(default="", alias="S3_BUCKET")
+    s3_endpoint_url: str      = Field(default="", alias="S3_ENDPOINT_URL")       # R2: https://<account>.r2.cloudflarestorage.com
+    s3_access_key_id: str     = Field(default="", alias="S3_ACCESS_KEY_ID")
+    s3_secret_access_key: str = Field(default="", alias="S3_SECRET_ACCESS_KEY")
+    s3_region: str            = Field(default="auto", alias="S3_REGION")
+
+    @property
+    def object_storage_enabled(self) -> bool:
+        return bool(self.s3_bucket and self.s3_access_key_id and self.s3_secret_access_key)
+
     @field_validator("database_url", mode="before")
     @classmethod
     def _normalize_database_url(cls, value: str) -> str:
